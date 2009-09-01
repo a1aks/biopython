@@ -20,6 +20,7 @@ from Bio.Alphabet import generic_dna
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 import struct
+import sys
 
 def _sff_file_header(handle) :
     """Read in an SFF file header (PRIVATE).
@@ -29,8 +30,12 @@ def _sff_file_header(handle) :
     Returns a tuple of values from the header.
     """
     if hasattr(handle,"mode") and "U" in handle.mode.upper() :
-        raise ValueError("SFF files must not be opened in universal new lines mode. "
-                         "Default or binary mode is fine.")
+        raise ValueError("SFF files must NOT be opened in universal new "
+                         "lines mode. Binary mode is recommended (although "
+                         "on Unix the default mode is also fine).")
+    elif hasattr(handle,"mode") and "B" not in handle.mode.upper() \
+    and sys.platform == "win32":
+        raise ValueError("SFF files must be opened in binary mode on Windows")
     #file header (part one)
     #use big endiean encdoing   >
     #magic_number               I
@@ -341,25 +346,27 @@ def _SffTrimIterator(handle, alphabet = generic_dna) :
 if __name__ == "__main__" :
     print "Running quick self test"
     filename = "../../Tests/Roche/E3MFGYR02_random_10_reads.sff"
-    index1 = sorted(_sff_read_roche_index(open(filename)))
-    index2 = sorted(_sff_read_roche_index(open(filename, "rB")))
+    index1 = sorted(_sff_read_roche_index(open(filename, "rb")))
+    index2 = sorted(_sff_do_slow_index(open(filename, "rb")))
     assert index1 == index2
-    index2 = sorted(_sff_do_slow_index(open(filename)))
-    assert index1 == index2
-    index2 = sorted(_sff_do_slow_index(open(filename, "rB")))
-    assert index1 == index2
-    assert len(index1) == len(list(SffIterator(open(filename))))
-    assert len(index1) == len(list(SffIterator(open(filename, "r"))))
-    assert len(index1) == len(list(SffIterator(open(filename, "rB"))))
+    assert len(index1) == len(list(SffIterator(open(filename, "rb"))))
     from StringIO import StringIO
-    assert len(index1) == len(list(SffIterator(StringIO(open(filename).read()))))
-    assert len(index1) == len(list(SffIterator(StringIO(open(filename,"r").read()))))
-    assert len(index1) == len(list(SffIterator(StringIO(open(filename,"rB").read()))))
-                    
-    sff = list(SffIterator(open(filename)))
-    sff_trim = list(SffIterator(open(filename), trim=True))
+    assert len(index1) == len(list(SffIterator(StringIO(open(filename,"rb").read()))))
 
-    print _sff_read_roche_index_xml(open(filename))
+    if sys.platform != "win32" :
+        assert len(index1) == len(list(SffIterator(open(filename, "r"))))
+        index2 = sorted(_sff_read_roche_index(open(filename)))
+        assert index1 == index2
+        index2 = sorted(_sff_do_slow_index(open(filename)))
+        assert index1 == index2
+        assert len(index1) == len(list(SffIterator(open(filename))))
+        assert len(index1) == len(list(SffIterator(StringIO(open(filename,"r").read()))))
+        assert len(index1) == len(list(SffIterator(StringIO(open(filename).read()))))
+                    
+    sff = list(SffIterator(open(filename, "rb")))
+    sff_trim = list(SffIterator(open(filename, "rb"), trim=True))
+
+    print _sff_read_roche_index_xml(open(filename, "rb"))
 
     from Bio import SeqIO
     filename = "../../Tests/Roche/E3MFGYR02_random_10_reads_no_trim.fasta"

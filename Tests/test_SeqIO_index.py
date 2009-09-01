@@ -11,11 +11,17 @@ from Bio import SeqIO
 from Bio.SeqIO._index import _FormatToIndexedDict
 from Bio.Alphabet import generic_protein, generic_nucleotide, generic_dna
 
+BINARY_FORMATS = ["sff", "sff-trim"]
+
 class IndexDictTests(unittest.TestCase) :
     """Cunning unit test where methods are added at run time."""
     def simple_check(self, filename, format, alphabet) :
+        if format in BINARY_FORMATS :
+            mode = "rb"
+        else :
+            mode = "r"
         id_list = [rec.id for rec in \
-                   SeqIO.parse(open(filename), format, alphabet)]
+                   SeqIO.parse(open(filename, mode), format, alphabet)]
         rec_dict = SeqIO.indexed_dict(filename, format, alphabet)
         self.assertEqual(set(id_list), set(rec_dict.keys()))
         #This is redundant, I just want to make sure len works:

@@ -15,6 +15,8 @@ from Bio.SeqRecord import SeqRecord
 from StringIO import StringIO
 from Bio.Data.IUPACData import ambiguous_dna_letters, ambiguous_rna_letters
 
+BINARY_FORMATS = ["sff", "sff-trim"]
+
 def truncation_expected(format) :
     if format in ["fastq-solexa", "fastq-illumina"] :
         return 62
@@ -26,7 +28,11 @@ def truncation_expected(format) :
 
 #Top level function as this makes it easier to use for debugging:
 def write_read(filename, in_format, out_format) :
-    records = list(SeqIO.parse(open(filename),in_format))
+    if in_format in BINARY_FORMATS :
+        mode = "rb"
+    else :
+        mode = "r"
+    records = list(SeqIO.parse(open(filename, mode),in_format))
     #Write it out...
     handle = StringIO()
     SeqIO.write(records, handle, out_format)
