@@ -160,6 +160,7 @@ def _sff_find_roche_index(handle) :
     if magic_number != 778921588 :
         raise ValueError("Wrong magic number in SFF index header")
     if (ver0, ver1, ver2, ver3) != (49,46,48,48) :
+        #This is "1.00" as a string
         raise ValueError("Unsupported version in index header, %i.%i.%i.%i" \
                          % (ver0, ver1, ver2, ver3))
     if index_length != fmt_size + xml_size + data_size :
@@ -429,15 +430,15 @@ class SffWriter(SequenceWriter) :
         self._index_start = handle.tell() #need for header
         #XML...
         from Bio import __version__
-        xml = "<!-- This file was output with Biopython %s -->" % __version__
-        xml += "<!-- This XML and index block attempts to mimic Roche SFF files -->"
-        xml += "<!-- This file may be a combination of multiple SFF files etc -->"
+        xml = "<!-- This file was output with Biopython %s -->\n" % __version__
+        xml += "<!-- This XML and index block attempts to mimic Roche SFF files -->\n"
+        xml += "<!-- This file may be a combination of multiple SFF files etc -->\n"
         xml_len = len(xml)
         index_len = len(self._index)*20
         #Write to the file...
         fmt = ">I4BLL"
         handle.write(struct.pack(fmt, 778921588, #magic number
-                                 49,46,48,48, #Roche index version number (!)
+                                 49,46,48,48, #Roche index version, "1.00"
                                  xml_len, index_len) + xml)
         fmt2 = ">14s6B"
         assert 20 == struct.calcsize(fmt2)
