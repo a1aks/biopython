@@ -14,8 +14,7 @@ For a description of the file format, please see:
 http://www.ncbi.nlm.nih.gov/Traces/trace.cgi?cmd=show&f=formats&m=doc&s=formats
 
 """
-#TODO - Can we parse the (optional) index?
-
+from Interfaces import SequenceWriter
 from Bio.Alphabet import generic_dna
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
@@ -343,6 +342,176 @@ def _SffTrimIterator(handle, alphabet = generic_dna) :
     """Iterate over SFF reads (as SeqRecord objects) with trimming (PRIVATE)."""
     return SffIterator(handle, alphabet, trim=True)
 
+
+class SffWriter(SequenceWriter) :
+    def __init__(self, handle):
+        """Creates the writer object."""
+        if hasattr(handle,"mode") and "U" in handle.mode.upper() :
+            raise ValueError("SFF files must NOT be opened in universal new "
+                             "lines mode. Binary mode is recommended (although "
+                             "on Unix the default mode is also fine).")
+        elif hasattr(handle,"mode") and "B" not in handle.mode.upper() \
+        and sys.platform == "win32":
+            raise ValueError("SFF files must be opened in binary mode on Windows")
+        self.handle = handle
+        self._header_written = False
+
+    def write_file(self, records) :
+        """Use this to write an entire file containing the given records."""
+        try :
+            self._number_of_reads = len(records)
+        except TypeError :
+            self._number_of_reads = 0 #dummy value
+            if not hasattr(self.handle, "seek") \
+            or not hasattr(self.handle, "tell") :
+                raise ValueError("A handle with a seek/tell methods is required in "
+                                 "order to record the total record count in the file "
+                                 "header (once it is known at the end).")
+        if not hasattr(records, "next") :
+            records = iter(records)
+        #Get the first record in order to find the flow information
+        #we will need for the header.
+        record = records.next()
+        try :
+            self._key_sequence = record.annotations["flow_key"]
+            self._flow_chars = record.annotations["flow_chars"]
+            self._number_of_flows_per_read = len(self._flow_chars)
+        except KeyError :
+            raise ValueError("Missing SFF flow information")
+        self.write_header()
+        self.write_record(record)
+        count = 1
+        for record in records :
+            self.write_record(record)
+            count += 1
+        if self._number_of_reads == 0 :
+            #Must go back and record the record count...
+            offset = self.handle.tell()
+            self.handle.seek(0)
+            self._number_of_reads = count
+            self.write_header()
+            self.handle.seek(offset) #not essential?
+        else :
+            assert count == self._number_of_reads
+        #TODO - Record the optional index?
+
+    def write_header(self) :
+        #Do header...
+        key_length = len(self._key_sequence)
+        #file header (part one)
+        #use big endiean encdoing   >
+        #magic_number               I
+        #version                    4B
+        #index_offset               Q
+        #index_length               I
+        #number_of_reads            I
+        #header_length              H
+        #key_length                 H
+        #number_of_flows_per_read   H
+        #flowgram_format_code       B
+        #[rest of file header depends on the number of flows and how many keys]
+        fmt = '>I4BQIIHHHB%is%is' % (self._number_of_flows_per_read, key_length)
+        #According to the spec, the header_length field should be the total number
+        #of bytes required by this set of header fields, and should be equal to
+        #"31 + number_of_flows_per_read + key_length" rounded up to the next value
+        #divisible by 8.
+        if struct.calcsize(fmt) % 8 == 0 :
+            padding = 0
+        else :
+            padding = 8 - (struct.calcsize(fmt) % 8)
+        header_length = struct.calcsize(fmt) + padding
+        assert header_length % 8 == 0
+        header = struct.pack(fmt, 779314790, #magic number
+                             0, 0, 0, 1, #version
+                             0, 0, #no index (yet)
+                             self._number_of_reads,
+                             header_length, key_length,
+                             self._number_of_flows_per_read,
+                             1, #the only flowgram format code we support
+                             self._flow_chars, self._key_sequence)
+        self.handle.write(header + chr(0)*padding)
+        
+    def write_record(self, record):
+        """Write a single additional record to the output file.
+
+        This assumes the header has been done.
+        """
+        #Basics
+        name = record.id
+        name_len = len(name)
+        seq = str(record.seq).upper()
+        seq_len = len(seq)
+        #Qualities
+        try :
+            quals = record.letter_annotations["phred_quality"]
+        except KeyError :
+            raise ValueError("Missing PHRED qualities information")
+        #Flow
+        try :
+            flow_values = record.annotations["flow_values"]
+            flow_index = record.annotations["flow_index"]
+            if self._key_sequence != record.annotations["flow_key"] \
+            or self._flow_chars != record.annotations["flow_chars"] :
+                raise ValueError("Records have inconsistent SFF flow data")
+        except KeyError :
+            raise ValueError("Missing SFF flow information")
+        except AttributeError :
+            raise ValueError("Header not written yet?")
+        #Clipping
+        try :
+            clip_qual_left = record.annotations["clip_qual_left"]
+            if clip_qual_left : clip_qual_left += 1
+            clip_qual_right = record.annotations["clip_qual_right"]
+            clip_adapter_left = record.annotations["clip_adapter_left"]
+            if clip_adapter_left : clip_adapter_left += 1
+            clip_adapter_right = record.annotations["clip_adapter_right"]
+        except KeyError :
+            raise ValueError("Missing SFF clipping information")
+        
+        #the read header format (fixed part):
+        #read_header_length     H
+        #name_length            H
+        #seq_len                I
+        #clip_qual_left         H
+        #clip_qual_right        H
+        #clip_adapter_left      H
+        #clip_adapter_right     H
+        #[rest of read header depends on the name length etc]
+        #name
+        #flow values
+        #flow index
+        #sequence
+        #padding
+        read_header_fmt = '>2HI4H%is' % name_len
+        if struct.calcsize(read_header_fmt) % 8 == 0 :
+            padding = 0
+        else :
+            padding = 8 - (struct.calcsize(read_header_fmt) % 8)
+        read_header_length = struct.calcsize(read_header_fmt) + padding
+        assert read_header_length % 8 == 0
+        data = struct.pack(read_header_fmt,
+                           read_header_length,
+                           name_len, seq_len,
+                           clip_qual_left, clip_qual_right,
+                           clip_adapter_left, clip_adapter_right,
+                           name) + chr(0)*padding
+        assert len(data) == read_header_length
+        #now the flowgram values, flowgram index, bases and qualities
+        #NOTE - assuming flowgram_format==1, which means struct type H
+        read_flow_fmt = ">%iH" % self._number_of_flows_per_read
+        read_flow_size = struct.calcsize(read_flow_fmt)
+        temp_fmt = ">%iB" % seq_len # used for flow index and quals
+        data += struct.pack(read_flow_fmt, *flow_values) \
+                + struct.pack(temp_fmt, *flow_index) \
+                + seq \
+                + struct.pack(temp_fmt, *quals)
+        #now any final padding...
+        padding = (read_flow_size + seq_len*3)%8
+        if padding :
+            padding = 8 - padding
+        self.handle.write(data + chr(0)*padding)
+
+
 if __name__ == "__main__" :
     print "Running quick self test"
     filename = "../../Tests/Roche/E3MFGYR02_random_10_reads.sff"
@@ -392,5 +561,33 @@ if __name__ == "__main__" :
         assert s.id == sT.id == fT.id == qT.id
         assert str(sT.seq) == str(fT.seq)
         assert sT.letter_annotations["phred_quality"] == qT.letter_annotations["phred_quality"]
+
+
+    print "Writing with a list of SeqRecords..."
+    handle = StringIO()
+    w = SffWriter(handle)
+    w.write_file(sff) #list
+    data = handle.getvalue()
+    print "And again with an iterator..."
+    handle = StringIO()
+    w = SffWriter(handle)
+    w.write_file(iter(sff))
+    assert data == handle.getvalue()
+    del data
+    print "...reading back"
+    handle.seek(0)
+    assert len(sff) == len(list(SffIterator(handle)))
+    handle.seek(0)
+    for old, new in zip(sff, SffIterator(handle)) :
+        assert old.id==new.id
+        assert set(old.letter_annotations) == set(new.letter_annotations)
+        for key in old.letter_annotations :
+            assert old.letter_annotations[key] == new.letter_annotations[key]
+        assert set(old.annotations) == set(new.annotations)
+        for key in old.annotations :
+            assert old.annotations[key] == new.annotations[key], \
+                   "%s\nold:%s\nnew:%s" % (key, old.annotations[key], new.annotations[key])
+        assert str(old.seq)==str(new.seq), "Old:\n%s\nvs:\n%s" % (old.seq, new.seq)
+    handle.close()
 
     print "Done"
