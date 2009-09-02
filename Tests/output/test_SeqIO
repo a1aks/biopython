@@ -2947,4 +2947,5 @@ Testing can write/read alignment with repeated record
  Failed: Missing SFF flow information
  Checking can write/read as 'tab' format
  Checking can write/read as 'nexus' format
+Writing no records to sff format failed: Need at least one record for SFF output
 Finished tested writing files
