@@ -305,6 +305,7 @@ _FormatToIterator ={"fasta" : FastaIO.FastaIterator,
                     "fastq-illumina" : QualityIO.FastqIlluminaIterator,
                     "qual" : QualityIO.QualPhredIterator,
                     "sff": SffIO.SffIterator,
+                    #Not sure about this in the long run:
                     "sff-trim": SffIO._SffTrimIterator,
                     }
 
@@ -318,6 +319,7 @@ _FormatToWriter ={"fasta" : FastaIO.FastaWriter,
                   "fastq-illumina" : QualityIO.FastqIlluminaWriter,
                   "phd" : PhdIO.PhdWriter,
                   "qual" : QualityIO.QualPhredWriter,
+                  "sff" : SffIO.SffWriter,
                   }
 
 def write(sequences, handle, format) :

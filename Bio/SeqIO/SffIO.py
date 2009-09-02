@@ -371,7 +371,15 @@ class SffWriter(SequenceWriter) :
             records = iter(records)
         #Get the first record in order to find the flow information
         #we will need for the header.
-        record = records.next()
+        try :
+            record = records.next()
+        except StopIteration :
+            record = None
+        if record is None :
+            #No records -> empty SFF file (or an error)?
+            #We can't write a header without the flow information.
+            #return 0
+            raise ValueError("Need at least one record for SFF output")
         try :
             self._key_sequence = record.annotations["flow_key"]
             self._flow_chars = record.annotations["flow_chars"]
@@ -394,6 +402,7 @@ class SffWriter(SequenceWriter) :
         else :
             assert count == self._number_of_reads
         #TODO - Record the optional index?
+        return count
 
     def write_header(self) :
         #Do header...
