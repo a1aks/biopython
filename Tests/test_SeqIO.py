@@ -51,6 +51,7 @@ test_write_read_alignment_formats.remove("fastq-sanger") #an alias for fastq
 # - integer: number of sequences
 
 test_files = [ \
+    ("sff",    False, 'Roche/E3MFGYR02_random_10_reads.sff', 10),
 #Following examples are also used in test_Clustalw.py
     ("clustal",True,  'Clustalw/cw02.aln', 2),
     ("clustal",True,  'Clustalw/opuntia.aln', 7),

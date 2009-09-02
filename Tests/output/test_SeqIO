@@ -1,4 +1,31 @@
 test_SeqIO
+Testing reading sff format file Roche/E3MFGYR02_random_10_reads.sff
+ ID and Name='E3MFGYR02JWQ7T',
+ Seq='tcagGGTCTACATGTTGGTTAACCCGTACTGATTTGAATT...GGGCTTa', length=265
+ ID and Name='E3MFGYR02JA6IL',
+ Seq='tcagTTTTTTTTGGAAAGGAAAACGGACGTACTCATAGAT...AAATGcc', length=271
+ ID and Name='E3MFGYR02JHD4H',
+ Seq='tcagAAAGACAAGTGGTATCAACGCAGAGTGGCCATTACG...gagaacg', length=310
+ ...
+ ID and Name='E3MFGYR02F7Z7G',
+ Seq='tcagAATCATCCACTTTTTAACGTTTTGTTTTGTTCATCT...nnnnnnn', length=219
+ Checking can write/read as 'fasta' format
+ Checking can write/read as 'clustal' format
+ Failed: Sequences must all be the same length
+ Checking can write/read as 'phylip' format
+ Failed: Sequences must all be the same length
+ Checking can write/read as 'stockholm' format
+ Failed: Sequences must all be the same length
+ Checking can write/read as 'fastq' format
+ Checking can write/read as 'fastq-illumina' format
+ Checking can write/read as 'fastq-solexa' format
+ Checking can write/read as 'genbank' format
+ Checking can write/read as 'phd' format
+ Checking can write/read as 'qual' format
+ Checking can write/read as 'sff' format
+ Checking can write/read as 'tab' format
+ Checking can write/read as 'nexus' format
+ Failed: Sequences must all be the same length
 Testing reading clustal format file Clustalw/cw02.aln
  ID = 'gi|4959044|gb|AAD34209.1|AF069', Name='<unknown name>',
  Seq='MENSDSNDKGSDQSAAQRRSQMDRLDREEAFYQFVNNLSE...GNRESVV', length=601
