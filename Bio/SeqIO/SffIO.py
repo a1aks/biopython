@@ -350,7 +350,7 @@ def _SffTrimIterator(handle, alphabet=Alphabet.generic_dna) :
 
 
 class SffWriter(SequenceWriter) :
-    def __init__(self, handle):
+    def __init__(self, handle, index=True):
         """Creates the writer object."""
         if hasattr(handle,"mode") and "U" in handle.mode.upper() :
             raise ValueError("SFF files must NOT be opened in universal new "
@@ -360,7 +360,10 @@ class SffWriter(SequenceWriter) :
         and sys.platform == "win32":
             raise ValueError("SFF files must be opened in binary mode on Windows")
         self.handle = handle
-        self._header_written = False
+        if index :
+            self._index = []
+        else :
+            self._index = None
 
     def write_file(self, records) :
         """Use this to write an entire file containing the given records."""
@@ -373,6 +376,14 @@ class SffWriter(SequenceWriter) :
                 raise ValueError("A handle with a seek/tell methods is required in "
                                  "order to record the total record count in the file "
                                  "header (once it is known at the end).")
+        if self._index is not None and \
+        not (hasattr(self.handle, "seek") and hasattr(self.handle, "tell")) :
+            import warnings
+            warnings.warn("A handle with a seek/tell methods is required in "
+                          "order to record an SFF index.")
+            self._index = None
+        self._index_start = 0
+        self._index_length = 0
         if not hasattr(records, "next") :
             records = iter(records)
         #Get the first record in order to find the flow information
@@ -407,8 +418,53 @@ class SffWriter(SequenceWriter) :
             self.handle.seek(offset) #not essential?
         else :
             assert count == self._number_of_reads
-        #TODO - Record the optional index?
+        if self._index is not None :
+            self._write_index()
         return count
+
+    def _write_index(self) :
+        assert len(self._index)==self._number_of_reads
+        handle = self.handle
+        self._index.sort()
+        self._index_start = handle.tell() #need for header
+        #XML...
+        from Bio import __version__
+        xml = "<!-- This file was output with Biopython %s -->" % __version__
+        xml += "<!-- This XML and index block attempts to mimic Roche SFF files -->"
+        xml += "<!-- This file may be a combination of multiple SFF files etc -->"
+        xml_len = len(xml)
+        index_len = len(self._index)*20
+        #Write to the file...
+        fmt = ">I4BLL"
+        handle.write(struct.pack(fmt, 778921588, #magic number
+                                 49,46,48,48, #Roche index version number (!)
+                                 xml_len, index_len) + xml)
+        fmt2 = ">14s6B"
+        assert 20 == struct.calcsize(fmt2)
+        self._index.sort()
+        for name, offset in self._index :
+            #TODO - Work you why struct L doesn't work
+            #TODO - Speed up this maths:
+            off3 = offset
+            off0 = off3 % 255
+            off3 -= off0
+            off1 = off3 % 65025
+            off3 -= off1
+            off2 = off3 % 16581375
+            off3 -= off2
+            assert offset == off0 + off1 + off2 + off3, \
+                   "%i -> %i %i %i %i" % (offset, off0, off1, off2, off3)
+            handle.write(struct.pack(fmt2, name, 0,
+                                     off3//16581375, off2//65025, off1//255, off0,
+                                     255))
+        #Must now go back and update the header...
+        self._index_length = struct.calcsize(fmt) + xml_len + index_len  #need for header
+        offset = handle.tell()
+        assert offset == self._index_start + self._index_length, \
+               "%i vs %i + %i"  %(offset, self._index_start, self._index_length)
+        handle.seek(0)
+        self.write_header()
+        handle.seek(offset) #not essential?
 
     def write_header(self) :
         #Do header...
@@ -438,7 +494,7 @@ class SffWriter(SequenceWriter) :
         assert header_length % 8 == 0
         header = struct.pack(fmt, 779314790, #magic number
                              0, 0, 0, 1, #version
-                             0, 0, #no index (yet)
+                             self._index_start, self._index_length,
                              self._number_of_reads,
                              header_length, key_length,
                              self._number_of_flows_per_read,
@@ -482,6 +538,16 @@ class SffWriter(SequenceWriter) :
             clip_adapter_right = record.annotations["clip_adapter_right"]
         except KeyError :
             raise ValueError("Missing SFF clipping information")
+
+        #Capture information for index
+        if self._index is not None :
+            if len(name) != 14 :
+                #The index block may allow this, but we don't know
+                #exactly how it would look (e.g. shorter entries?
+                #null padded?). Therefore abort writing the index:
+                self._index = None
+            else :
+                self._index.append((name, self.handle.tell()))
         
         #the read header format (fixed part):
         #read_header_length     H
