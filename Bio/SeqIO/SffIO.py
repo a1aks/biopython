@@ -146,32 +146,51 @@ def _sff_find_roche_index(handle) :
     header_length, index_offset, index_length, number_of_reads, \
     number_of_flows_per_read, flow_chars, key_sequence \
         = _sff_file_header(handle)
-    #print "Index offset %i, length %i, reads %i" \
-    #      % (index_offset, index_length, number_of_reads)
     assert handle.tell() == header_length
     if not index_offset or not index_offset :
         raise ValueError("No index present in this SFF file")
     #Now jump to the header...
     handle.seek(index_offset)
-    fmt = ">I4BLL"
+    fmt = ">I4B"
     fmt_size = struct.calcsize(fmt)
-    magic_number, ver0, ver1, ver2, ver3, xml_size, data_size \
-                  = struct.unpack(fmt, handle.read(fmt_size))
-    if magic_number != 778921588 :
-        raise ValueError("Wrong magic number in SFF index header")
-    if (ver0, ver1, ver2, ver3) != (49,46,48,48) :
-        #This is "1.00" as a string
-        raise ValueError("Unsupported version in index header, %i.%i.%i.%i" \
-                         % (ver0, ver1, ver2, ver3))
-    if index_length != fmt_size + xml_size + data_size :
-        raise ValueError("Problem understanding index header")
-    if data_size != 20 * number_of_reads :
-        raise ValueError("Expect index data block of %i bytes (20 bytes per read). "
-                         "Got %i bytes" % (20 * number_of_reads, data_size))
-    return number_of_reads, header_length, \
-           index_offset, index_length, \
-           index_offset + fmt_size, xml_size, \
-           index_offset + fmt_size + xml_size, data_size
+    data = handle.read(fmt_size)
+    magic_number, ver0, ver1, ver2, ver3 = struct.unpack(fmt, data)
+    if magic_number == 778921588 : #778921588 = ".mft"
+        #This is typicall from raw Roche 454 SFF files
+        if (ver0, ver1, ver2, ver3) != (49,46,48,48) :
+            #This is "1.00" as a string
+            raise ValueError("Unsupported version in index header, %i.%i.%i.%i" \
+                             % (ver0, ver1, ver2, ver3))
+        fmt2 = ">LL"
+        fmt2_size = struct.calcsize(fmt2)
+        xml_size, data_size = struct.unpack(fmt2, handle.read(fmt2_size))
+        if index_length != fmt_size + fmt2_size + xml_size + data_size :
+            raise ValueError("Problem understanding index header, %i != %i + %i + %i + %i" \
+                             % (index_length, fmt_size, fmt2_size, xml_size, data_size))
+        if data_size != 20 * number_of_reads :
+            raise ValueError("Expect index data block of %i bytes (20 bytes per read). "
+                             "Got %i bytes" % (20 * number_of_reads, data_size))
+        return number_of_reads, header_length, \
+               index_offset, index_length, \
+               index_offset + fmt_size + fmt2_size, xml_size, \
+               index_offset + fmt_size + fmt2_size + xml_size, data_size
+    elif magic_number == 779317876 : #779317876 = ".srt"
+        #I've had this from Roche tool sfffile when the read identifiers
+        #had nonstandard lengths and there was no XML manifest.
+        if (ver0, ver1, ver2, ver3) != (49,46,48,48) :
+            #This is "1.00" as a string
+            raise ValueError("Unsupported version in index header, %i.%i.%i.%i" \
+                             % (ver0, ver1, ver2, ver3))
+        data = handle.read(4)
+        if data != chr(0)*4 :
+            raise ValueError("Did find expected null four bytes")
+        return number_of_reads, header_length, \
+               index_offset, index_length, \
+               0, 0, \
+               index_offset + fmt_size + 4, index_length - fmt_size - 4
+    else :
+        raise ValueError("Unknown magic number %i in SFF index header:\n%s" \
+                         % (magic_number, repr(data)))
 
 def _sff_read_roche_index_xml(handle) :
     """Reads any existing Roche style XML meta data in the SFF "index" (PRIVATE).
@@ -180,6 +199,8 @@ def _sff_read_roche_index_xml(handle) :
     """
     number_of_reads, header_length, index_offset, index_length, xml_offset, \
     xml_size, read_index_offset, read_index_size = _sff_find_roche_index(handle)
+    if not xml_offset or not xml_size :
+        raise ValueError("No XML manifest found")
     handle.seek(xml_offset)
     return handle.read(xml_size)
 
@@ -190,39 +211,45 @@ def _sff_read_roche_index(handle) :
 
     Will use the handle seek/tell functions.
 
-    Note: There are a number of hard coded assumptions here (e.g. the read names are
-    14 characters), some of which could be relaxed given some suitable example files.
+    Roche SFF indices seems to use base 255 not 256, meaning we see
+    bytes in range the range 0 to 254 only. I would have expected
+    each byte to be in the range 0 to 255 inclusive, and then to be
+    scaled by 1, 256, 256**2, 256**3 etc.
+
+    This is very strange, but I believe this was so that the 0xFF byte
+    (character 255) can be used as a marker character to separate
+    entries (required if the read name lengths vary). This is based
+    one the index the Roche tool sfffile will write when fed a valid
+    SFF file without an index where the read name lengths vary.
     """
     number_of_reads, header_length, index_offset, index_length, xml_offset, \
     xml_size, read_index_offset, read_index_size = _sff_find_roche_index(handle)
     #Now parse the read index...    
     handle.seek(read_index_offset)
-    fmt = ">14s6B"
-    assert 20 == struct.calcsize(fmt)
+    start=chr(0)
+    end=chr(255)
+    fmt = ">5B"
     for read in range(number_of_reads) :
-        data = handle.read(20)
-        name, x0, off3, off2, off1, off0, x255 = struct.unpack(fmt, data)
-        if x0 != 0 :
-            raise ValueError("Found %s instead of null at end of name for index entry %i,\n%s" \
-                             % (repr(x0), read, repr(data)))
-        if x255 != 255 :
-            raise ValueError("Found %s instead of 0xff at end of index entry %i,\n%s" \
-                             % (repr(x255), read, repr(data)))
-        if off0 == 255 or off1 == 255 or off2 == 255 or off3 == 255 :
-            raise ValueError("Found index bytes (%i,%i,%i,%i) for entry %i,\n%s" \
-                             % (off3, off2, off1, off0, read, repr(data)))
-        #Roche SFF indices seems to use base 255 not 256, meaning we see
-        #bytes in range the range 0 to 254 only. I would have expected
-        #each byte to be in the range 0 to 255 inclusive, and then to be
-        #scaled by 1, 256, 256**2 and 256**3 (then maybe struct "L" would
-        #work?). This is very strange, so either I am confused, or there
-        #was a deliberate (or accidental?) choice to do it this way...
+        #TODO - Be more aware of when the index should end?
+        data = handle.read(6)
+        while data[-1] != end :
+            more = handle.read(1)
+            if not more : raise ValueError("Premature end of file!")
+            data += more
+        name = data[:-6]
+        off4, off3, off2, off1, off0 = struct.unpack(fmt, data[-6:-1])
         offset = off0 + 255*off1 + 65025*off2 + 16581375*off3
-        if not (header_length <= offset <= index_offset, offset) :
-            raise ValueError("Found index bytes (%i,%i,%i,%i) which we interpret as"
-                             "offset %i for entry %i, but this is out of range,\n%s" \
-                             % (off3, off2, off1, off0, offset, read, repr(data)))
+        if off4 :
+            #print repr(data)
+            #print name, off4, off3, off2, off1, off0
+            import warnings
+            warnings.warn("We're guessing how the byte of the index is used, assuming "
+                          "it is important for files over 4GB")
+            offset = 4228250625L*off4 + long
         yield name, offset
+    if handle.tell() != read_index_offset + read_index_size :
+        raise ValueError("Problem with index length? %i vs %i" \
+                         % (handle.tell(), read_index_offset + read_index_size))
 
 def _sff_read_seq_record(handle, number_of_flows_per_read, flow_chars,
                          key_sequence, alphabet, trim=False) :
@@ -523,7 +550,7 @@ class SffWriter(SequenceWriter) :
             padding = 8 - (struct.calcsize(fmt) % 8)
         header_length = struct.calcsize(fmt) + padding
         assert header_length % 8 == 0
-        header = struct.pack(fmt, 779314790, #magic number
+        header = struct.pack(fmt, 779314790, #magic number 0x2E736666
                              0, 0, 0, 1, #version
                              self._index_start, self._index_length,
                              self._number_of_reads,
@@ -705,5 +732,18 @@ if __name__ == "__main__" :
     assert data == original
     del data
     handle.close()
+
+    print "-"*50
+    filename = "../../Tests/Roche/greek.sff"
+    for record in SffIterator(open(filename,"rb")) :
+        print record.id
+    index1 = sorted(_sff_read_roche_index(open(filename, "rb")))
+    index2 = sorted(_sff_do_slow_index(open(filename, "rb")))
+    assert index1 == index2
+    try :
+        print _sff_read_roche_index_xml(open(filename, "rb"))
+        assert False, "Should fail!"
+    except ValueError :
+        pass
 
     print "Done"
