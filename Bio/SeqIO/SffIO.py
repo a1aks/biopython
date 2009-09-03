@@ -351,8 +351,13 @@ def _SffTrimIterator(handle, alphabet=Alphabet.generic_dna) :
 
 
 class SffWriter(SequenceWriter) :
-    def __init__(self, handle, index=True):
-        """Creates the writer object."""
+    def __init__(self, handle, index=True, xml=None):
+        """Creates the writer object.
+
+        handle - Output handle, ideally in binary write mode.
+        index - Boolean argument, should we try and write an index?
+        xml - Optional string argument, xml to be recorded in the index block.
+        """
         if hasattr(handle,"mode") and "U" in handle.mode.upper() :
             raise ValueError("SFF files must NOT be opened in universal new "
                              "lines mode. Binary mode is recommended (although "
@@ -361,6 +366,7 @@ class SffWriter(SequenceWriter) :
         and sys.platform == "win32":
             raise ValueError("SFF files must be opened in binary mode on Windows")
         self.handle = handle
+        self._xml = xml
         if index :
             self._index = []
         else :
@@ -429,10 +435,13 @@ class SffWriter(SequenceWriter) :
         self._index.sort()
         self._index_start = handle.tell() #need for header
         #XML...
-        from Bio import __version__
-        xml = "<!-- This file was output with Biopython %s -->\n" % __version__
-        xml += "<!-- This XML and index block attempts to mimic Roche SFF files -->\n"
-        xml += "<!-- This file may be a combination of multiple SFF files etc -->\n"
+        if isinstance(self._xml, str) :
+            xml = self._xml
+        else :
+            from Bio import __version__
+            xml = "<!-- This file was output with Biopython %s -->\n" % __version__
+            xml += "<!-- This XML and index block attempts to mimic Roche SFF files -->\n"
+            xml += "<!-- This file may be a combination of multiple SFF files etc -->\n"
         xml_len = len(xml)
         index_len = len(self._index)*20
         #Write to the file...
@@ -459,10 +468,17 @@ class SffWriter(SequenceWriter) :
                                      off3//16581375, off2//65025, off1//255, off0,
                                      255))
         #Must now go back and update the header...
+        #Note any padding in not included:
         self._index_length = struct.calcsize(fmt) + xml_len + index_len  #need for header
+        #Padd out to an 8 byte boundary
+        if self._index_length % 8 :
+            padding = 8 - (self._index_length%8)
+            handle.write(chr(0)*padding)
+        else :
+            padding = 0
         offset = handle.tell()
-        assert offset == self._index_start + self._index_length, \
-               "%i vs %i + %i"  %(offset, self._index_start, self._index_length)
+        assert offset == self._index_start + self._index_length + padding, \
+               "%i vs %i + %i + %i"  %(offset, self._index_start, self._index_length, padding)
         handle.seek(0)
         self.write_header()
         handle.seek(offset) #not essential?
@@ -597,6 +613,7 @@ class SffWriter(SequenceWriter) :
 if __name__ == "__main__" :
     print "Running quick self test"
     filename = "../../Tests/Roche/E3MFGYR02_random_10_reads.sff"
+    metadata = _sff_read_roche_index_xml(open(filename, "rb"))
     index1 = sorted(_sff_read_roche_index(open(filename, "rb")))
     index2 = sorted(_sff_do_slow_index(open(filename, "rb")))
     assert index1 == index2
@@ -647,29 +664,20 @@ if __name__ == "__main__" :
 
     print "Writing with a list of SeqRecords..."
     handle = StringIO()
-    w = SffWriter(handle)
+    w = SffWriter(handle, xml=metadata)
     w.write_file(sff) #list
     data = handle.getvalue()
     print "And again with an iterator..."
     handle = StringIO()
-    w = SffWriter(handle)
+    w = SffWriter(handle, xml=metadata)
     w.write_file(iter(sff))
     assert data == handle.getvalue()
+    #Check 100% identical to the original:
+    filename = "../../Tests/Roche/E3MFGYR02_random_10_reads.sff"
+    original = open(filename,"rb").read()
+    assert len(data) == len(original)
+    assert data == original
     del data
-    print "...reading back"
-    handle.seek(0)
-    assert len(sff) == len(list(SffIterator(handle)))
-    handle.seek(0)
-    for old, new in zip(sff, SffIterator(handle)) :
-        assert old.id==new.id
-        assert set(old.letter_annotations) == set(new.letter_annotations)
-        for key in old.letter_annotations :
-            assert old.letter_annotations[key] == new.letter_annotations[key]
-        assert set(old.annotations) == set(new.annotations)
-        for key in old.annotations :
-            assert old.annotations[key] == new.annotations[key], \
-                   "%s\nold:%s\nnew:%s" % (key, old.annotations[key], new.annotations[key])
-        assert str(old.seq)==str(new.seq), "Old:\n%s\nvs:\n%s" % (old.seq, new.seq)
     handle.close()
 
     print "Done"
