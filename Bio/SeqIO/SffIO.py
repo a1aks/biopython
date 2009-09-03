@@ -208,10 +208,20 @@ def _sff_read_roche_index(handle) :
         if x255 != 255 :
             raise ValueError("Found %s instead of 0xff at end of index entry %i,\n%s" \
                              % (repr(x255), read, repr(data)))
-        #TODO - Work out why struct doesn't do what I want with "L"
+        if off0 == 255 or off1 == 255 or off2 == 255 or off3 == 255 :
+            raise ValueError("Found index bytes (%i,%i,%i,%i) for entry %i,\n%s" \
+                             % (off3, off2, off1, off0, read, repr(data)))
+        #Roche SFF indices seems to use base 255 not 256, meaning we see
+        #bytes in range the range 0 to 254 only. I would have expected
+        #each byte to be in the range 0 to 255 inclusive, and then to be
+        #scaled by 1, 256, 256**2 and 256**3 (then maybe struct "L" would
+        #work?). This is very strange, so either I am confused, or there
+        #was a deliberate (or accidental?) choice to do it this way...
         offset = off0 + 255*off1 + 65025*off2 + 16581375*off3
-        assert header_length <= offset <= index_offset, offset
-        #print read, name, offset
+        if not (header_length <= offset <= index_offset, offset) :
+            raise ValueError("Found index bytes (%i,%i,%i,%i) which we interpret as"
+                             "offset %i for entry %i, but this is out of range,\n%s" \
+                             % (off3, off2, off1, off0, offset, read, repr(data)))
         yield name, offset
 
 def _sff_read_seq_record(handle, number_of_flows_per_read, flow_chars,
@@ -453,8 +463,9 @@ class SffWriter(SequenceWriter) :
         assert 20 == struct.calcsize(fmt2)
         self._index.sort()
         for name, offset in self._index :
-            #TODO - Work you why struct L doesn't work
-            #TODO - Speed up this maths:
+            #Roche files seem to record the offsets using base 255 not 256.
+            #See comments for parsing the index block. There may be a faster
+            #way to code this, but we can't easily use shifts due to odd base
             off3 = offset
             off0 = off3 % 255
             off3 -= off0
@@ -464,13 +475,16 @@ class SffWriter(SequenceWriter) :
             off3 -= off2
             assert offset == off0 + off1 + off2 + off3, \
                    "%i -> %i %i %i %i" % (offset, off0, off1, off2, off3)
-            handle.write(struct.pack(fmt2, name, 0,
-                                     off3//16581375, off2//65025, off1//255, off0,
-                                     255))
+            off3, off2, off1, off0 = off3//16581375, off2//65025, off1//255, off0
+            assert off0 < 255 and off1 < 255 and off2 < 255 and off3 < 255, \
+                   "%i -> %i %i %i %i" % (offset, off0, off1, off2, off3)
+            handle.write(struct.pack(fmt2, name, 0, off3, off2, off1, off0, 255))
         #Must now go back and update the header...
         #Note any padding in not included:
-        self._index_length = struct.calcsize(fmt) + xml_len + index_len  #need for header
-        #Padd out to an 8 byte boundary
+        self._index_length = struct.calcsize(fmt) + xml_len + index_len #need for header
+        #Pad out to an 8 byte boundary (although I have noticed some
+        #real Roche SFF files neglect to do this depsite their manual
+        #suggesting this padding should be there):
         if self._index_length % 8 :
             padding = 8 - (self._index_length%8)
             handle.write(chr(0)*padding)
@@ -564,7 +578,19 @@ class SffWriter(SequenceWriter) :
                 #null padded?). Therefore abort writing the index:
                 self._index = None
             else :
-                self._index.append((name, self.handle.tell()))
+                offset = self.handle.tell()
+                #Check the position of the final record (before sort by name)
+                #See comments earlier about how base 255 seems to be used(!)
+                #This means the limit is 255**4 + 255**3 +255**2 + 255**1
+                if offset > 4244897280L :
+                    import warnings
+                    warnings.warn("Read %s has file offset %i, which is too large to store "
+                                  "in the Roche SFF index structure. No index block will be "
+                                  "recorded." % (name, offset))
+                    #No point recoring the offsets now
+                    self._index = None
+                else :
+                    self._index.append((name, self.handle.tell()))
         
         #the read header format (fixed part):
         #read_header_length     H
