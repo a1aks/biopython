@@ -380,8 +380,8 @@ def SffIterator(handle, alphabet=Alphabet.generic_dna, trim=False) :
     #in the file...
     for read in range(number_of_reads) :
         if index_offset and handle.tell() == index_offset :
-            import warnings
-            warnings.warn("Found SFF index before or in the reads")
+            #import warnings
+            #warnings.warn("Found SFF index before read %i (not at end)" % (read+1))
             offset = index_offset + index_length
             if offset % 8 :
                 offset += 8 - (offset % 8)
@@ -701,6 +701,11 @@ if __name__ == "__main__" :
     sff = list(SffIterator(open(filename, "rb")))
 
     sff2 = list(SffIterator(open("../../Tests/Roche/E3MFGYR02_index_at_start.sff", "rb")))
+    assert len(sff) == len(sff2)
+    for old,new in zip(sff,sff2) :
+        assert old.id == new.id
+
+    sff2 = list(SffIterator(open("../../Tests/Roche/E3MFGYR02_index_in_middle.sff", "rb")))
     assert len(sff) == len(sff2)
     for old,new in zip(sff,sff2) :
         assert old.id == new.id
