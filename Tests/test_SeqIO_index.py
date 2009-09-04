@@ -89,6 +89,8 @@ tests = [
     ("SwissProt/sp010", "swiss", None),
     ("SwissProt/sp016", "swiss", None),
     ("Roche/E3MFGYR02_random_10_reads.sff", "sff", generic_dna),
+    ("Roche/greek.sff", "sff", generic_nucleotide),
+    ("Roche/paired.sff", "sff", None),
     ]
 for filename, format, alphabet in tests :
     assert format in _FormatToIndexedDict
