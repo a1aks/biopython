@@ -151,43 +151,49 @@ def _sff_find_roche_index(handle) :
         raise ValueError("No index present in this SFF file")
     #Now jump to the header...
     handle.seek(index_offset)
-    fmt = ">I4B"
+    fmt = ">4s4B"
     fmt_size = struct.calcsize(fmt)
     data = handle.read(fmt_size)
     magic_number, ver0, ver1, ver2, ver3 = struct.unpack(fmt, data)
-    if magic_number == 778921588 : #778921588 = ".mft"
-        #This is typicall from raw Roche 454 SFF files
+    if magic_number == ".mft" : # 778921588
+        #Roche 454 manifest index
+        #This is typical from raw Roche 454 SFF files (2009), and includes
+        #both an XML manifest and the sorted index.
         if (ver0, ver1, ver2, ver3) != (49,46,48,48) :
             #This is "1.00" as a string
-            raise ValueError("Unsupported version in index header, %i.%i.%i.%i" \
+            raise ValueError("Unsupported version in .mft index header, %i.%i.%i.%i" \
                              % (ver0, ver1, ver2, ver3))
         fmt2 = ">LL"
         fmt2_size = struct.calcsize(fmt2)
         xml_size, data_size = struct.unpack(fmt2, handle.read(fmt2_size))
         if index_length != fmt_size + fmt2_size + xml_size + data_size :
-            raise ValueError("Problem understanding index header, %i != %i + %i + %i + %i" \
+            raise ValueError("Problem understanding .mft index header, %i != %i + %i + %i + %i" \
                              % (index_length, fmt_size, fmt2_size, xml_size, data_size))
         return number_of_reads, header_length, \
                index_offset, index_length, \
                index_offset + fmt_size + fmt2_size, xml_size, \
                index_offset + fmt_size + fmt2_size + xml_size, data_size
-    elif magic_number == 779317876 : #779317876 = ".srt"
+    elif magic_number == ".srt" : #779317876
+        #Roche 454 sorted index
         #I've had this from Roche tool sfffile when the read identifiers
         #had nonstandard lengths and there was no XML manifest.
         if (ver0, ver1, ver2, ver3) != (49,46,48,48) :
             #This is "1.00" as a string
-            raise ValueError("Unsupported version in index header, %i.%i.%i.%i" \
+            raise ValueError("Unsupported version in .srt index header, %i.%i.%i.%i" \
                              % (ver0, ver1, ver2, ver3))
         data = handle.read(4)
         if data != chr(0)*4 :
-            raise ValueError("Did find expected null four bytes")
+            raise ValueError("Did not find expected null four bytes in .srt index")
         return number_of_reads, header_length, \
                index_offset, index_length, \
                0, 0, \
                index_offset + fmt_size + 4, index_length - fmt_size - 4
+    elif magic_number == ".hsh" :
+        raise ValueError("Hash table style indexes (.hsh) in SFF files are "
+                         "not (yet) supported")
     else :
-        raise ValueError("Unknown magic number %i in SFF index header:\n%s" \
-                         % (magic_number, repr(data)))
+        raise ValueError("Unknown magic number %s in SFF index header:\n%s" \
+                         % (repr(magic_number), repr(data)))
 
 def _sff_read_roche_index_xml(handle) :
     """Reads any existing Roche style XML meta data in the SFF "index" (PRIVATE).
@@ -207,6 +213,8 @@ def _sff_read_roche_index(handle) :
     """Reads any existing Roche style read index provided in the SFF file (PRIVATE).
 
     Will use the handle seek/tell functions.
+
+    This works on ".srt1.00" and ".mft1.00" style Roche SFF index blocks.
 
     Roche SFF indices seems to use base 255 not 256, meaning we see
     bytes in range the range 0 to 254 only. I would have expected
