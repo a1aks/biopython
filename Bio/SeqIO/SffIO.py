@@ -375,10 +375,20 @@ def SffIterator(handle, alphabet=Alphabet.generic_dna, trim=False) :
     assert 1 == struct.calcsize(">s")
     assert 1 == struct.calcsize(">c")
     assert read_header_size % 8 == 0 #Important for padding calc later!
-    #TODO - The spec allows for the index block to be in the middle
+    #The spec allows for the index block to be before or even in the middle
     #of the reads. We can check that if we keep track of our position
     #in the file...
     for read in range(number_of_reads) :
+        if index_offset and handle.tell() == index_offset :
+            import warnings
+            warnings.warn("Found SFF index before or in the reads")
+            offset = index_offset + index_length
+            if offset % 8 :
+                offset += 8 - (offset % 8)
+            handle.seek(offset)
+            #Now that we've done this, we don't need to do it again. Clear
+            #the index_offset so we can skip extra handle.tell() calls:
+            index_offset = 0
         yield _sff_read_seq_record(handle,
                                    number_of_flows_per_read,
                                    flow_chars,
@@ -689,6 +699,12 @@ if __name__ == "__main__" :
         assert len(index1) == len(list(SffIterator(StringIO(open(filename).read()))))
                     
     sff = list(SffIterator(open(filename, "rb")))
+
+    sff2 = list(SffIterator(open("../../Tests/Roche/E3MFGYR02_index_at_start.sff", "rb")))
+    assert len(sff) == len(sff2)
+    for old,new in zip(sff,sff2) :
+        assert old.id == new.id
+    
     sff_trim = list(SffIterator(open(filename, "rb"), trim=True))
 
     print _sff_read_roche_index_xml(open(filename, "rb"))
