@@ -183,10 +183,10 @@ class _IndexedSeqFileDict(dict) :
 
 class SffDict(_IndexedSeqFileDict) :
     """Indexed dictionary like access to a Standard Flowgram Format (SFF) file."""
-    def __init__(self, filename, alphabet) :
+    def __init__(self, filename, alphabet, key_function) :
         #On Unix, using mode="r" or "rb" works, "rU" does not.
         #On Windows, only using mode="rb" works, "r" and "rU" fail.
-        _IndexedSeqFileDict.__init__(self, filename, alphabet, "rb")
+        _IndexedSeqFileDict.__init__(self, filename, alphabet, key_function, "rb")
         handle = self._handle
         header_length, index_offset, index_length, number_of_reads, \
         self._flows_per_read, self._flow_chars, self._key_sequence \
