@@ -22,7 +22,7 @@ class IndexDictTests(unittest.TestCase) :
             mode = "r"
         id_list = [rec.id for rec in \
                    SeqIO.parse(open(filename, mode), format, alphabet)]
-        rec_dict = SeqIO.indexed_dict(filename, format, alphabet)
+        rec_dict = SeqIO.index(filename, format, alphabet)
         self.assertEqual(set(id_list), set(rec_dict.keys()))
         #This is redundant, I just want to make sure len works:
         self.assertEqual(len(id_list), len(rec_dict))
