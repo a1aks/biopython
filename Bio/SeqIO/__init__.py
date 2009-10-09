@@ -827,14 +827,21 @@ def convert(in_file, in_format, out_file, out_format, alphabet=None) :
     #TODO - Add optimised versions of important conversions
     #For now just off load the work to SeqIO parse/write    
     if isinstance(in_file, basestring) :
-        in_handle = open(in_file, "rU")
+        #Hack for SFF, will need to make this more general in future
+        if in_format in ["sff", "sff_trim"] :
+            in_handle = open(in_file, "rb")
+        else :
+            in_handle = open(in_file, "rU")
         in_close = True
     else :
         in_handle = in_file
         in_close = False
     #Don't open the output file until we've checked the input is OK?
     if isinstance(out_file, basestring) :
-        out_handle = open(out_file, "w")
+        if out_format in ["sff", "sff_trim"] :
+            out_handle = open(out_file, "wb")
+        else :
+            out_handle = open(out_file, "w")
         out_close = True
     else :
         out_handle = out_file
