@@ -828,7 +828,7 @@ def convert(in_file, in_format, out_file, out_format, alphabet=None) :
     #For now just off load the work to SeqIO parse/write    
     if isinstance(in_file, basestring) :
         #Hack for SFF, will need to make this more general in future
-        if in_format in ["sff", "sff_trim"] :
+        if in_format in ["sff", "sff-trim"] :
             in_handle = open(in_file, "rb")
         else :
             in_handle = open(in_file, "rU")
