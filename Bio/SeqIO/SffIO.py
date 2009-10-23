@@ -196,7 +196,7 @@ def _sff_find_roche_index(handle) :
                          % (repr(magic_number), repr(data)))
 
 def _sff_read_roche_index_xml(handle) :
-    """Reads any existing Roche style XML meta data in the SFF "index" (PRIVATE).
+    """Reads any existing Roche style XML manifest data in the SFF "index" (PRIVATE).
 
     Will use the handle seek/tell functions. Returns a string.
     """
@@ -216,16 +216,13 @@ def _sff_read_roche_index(handle) :
 
     This works on ".srt1.00" and ".mft1.00" style Roche SFF index blocks.
 
-    Roche SFF indices seems to use base 255 not 256, meaning we see
-    bytes in range the range 0 to 254 only. I would have expected
-    each byte to be in the range 0 to 255 inclusive, and then to be
-    scaled by 1, 256, 256**2, 256**3 etc.
+    Roche SFF indices use base 255 not 256, meaning we see bytes in range the range
+    0 to 254 only. This appears to be so that byte 0xFF (character 255) can be used
+    as a marker character to separate entries (required if the read name lengths vary).
 
-    This is very strange, but I believe this was so that the 0xFF byte
-    (character 255) can be used as a marker character to separate
-    entries (required if the read name lengths vary). This is based
-    one the index the Roche tool sfffile will write when fed a valid
-    SFF file without an index where the read name lengths vary.
+    Note that since only four bytes are used for the read offset, this is limited to
+    255^4 bytes (nearly 4GB). If you try to use the Roche sfffile tool to combined SFF
+    files beyound this limit, they issue a warning and ommit the index (and manifest).
     """
     number_of_reads, header_length, index_offset, index_length, xml_offset, \
     xml_size, read_index_offset, read_index_size = _sff_find_roche_index(handle)
@@ -245,12 +242,10 @@ def _sff_read_roche_index(handle) :
         off4, off3, off2, off1, off0 = struct.unpack(fmt, data[-6:-1])
         offset = off0 + 255*off1 + 65025*off2 + 16581375*off3
         if off4 :
-            #print repr(data)
-            #print name, off4, off3, off2, off1, off0
-            import warnings
-            warnings.warn("We're guessing how the byte of the index is used, assuming "
-                          "it is important for files over 4GB")
-            offset = 4228250625L*off4 + long
+            #Could in theory be used as a fifth piece of offset information,
+            #i.e. offset =+ 4228250625L*off4, but testing the Roche tools this
+            #is not the case. They simple don't support such large indexes.
+            raise ValueError("Expected a null terminator to the read name.")
         yield name, offset
     if handle.tell() != read_index_offset + read_index_size :
         raise ValueError("Problem with index length? %i vs %i" \
@@ -504,7 +499,7 @@ class SffWriter(SequenceWriter) :
         self._index.sort()
         index_len = 0 #don't know yet!
         for name, offset in self._index :
-            #Roche files seem to record the offsets using base 255 not 256.
+            #Roche files record the offsets using base 255 not 256.
             #See comments for parsing the index block. There may be a faster
             #way to code this, but we can't easily use shifts due to odd base
             off3 = offset
@@ -621,7 +616,7 @@ class SffWriter(SequenceWriter) :
         if self._index is not None :
             offset = self.handle.tell()
             #Check the position of the final record (before sort by name)
-            #See comments earlier about how base 255 seems to be used(!)
+            #See comments earlier about how base 255 seems to be used.
             #This means the limit is 255**4 + 255**3 +255**2 + 255**1
             if offset > 4244897280L :
                 import warnings
