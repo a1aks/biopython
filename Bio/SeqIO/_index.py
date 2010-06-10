@@ -22,6 +22,7 @@ import os
 import re
 from sqlite3 import dbapi2 as _sqlite
 from sqlite3 import IntegrityError as _IntegrityError
+from sqlite3 import OperationalError as _OperationalError
 import itertools
 import UserDict
 
@@ -88,14 +89,14 @@ class _IndexedSeqFileDict(UserDict.DictMixin):
             #entries in the file, but would be slow without an index on the
             #offset column which we don't otherwise need.
             if len(self):
-                key = str(self._offsets._con.execute("SELECT key FROM data ORDER BY key ASC LIMIT 1;").fetchone()[0])
+                key = str(self._offsets._con.execute("SELECT key FROM offset_data ORDER BY key ASC LIMIT 1;").fetchone()[0])
                 try:
                     record = self[key]
                     del key, record
                 except Exception, err:
                     raise ValueError("Is %s an out of date index database? %s" \
                                      % (index_filename, err))
-                key = str(self._offsets._con.execute("SELECT key FROM data ORDER BY key DESC LIMIT 1;").fetchone()[0])
+                key = str(self._offsets._con.execute("SELECT key FROM offset_data ORDER BY key DESC LIMIT 1;").fetchone()[0])
                 try:
                     record = self[key]
                     del key, record
@@ -248,64 +249,90 @@ class _SqliteOffsetDict(UserDict.DictMixin):
         #Use key_function=None for default value
         self._pending = []
         if os.path.isfile(index_filename):
-            #Reuse the index
-            self._con = _sqlite.connect(index_filename)
+            #Reuse the index.
+            con = _sqlite.connect(index_filename)
+            self._con = con
+            #Check the count...
+            try:
+                count, = con.execute("SELECT value FROM meta_data WHERE key=?;",
+                                     ("count",)).fetchone()
+                self._length = int(count)
+                if self._length == -1:
+                    raise ValueError("Unfinished/partial database")
+                count, = con.execute("SELECT COUNT(key) FROM offset_data;").fetchone()
+                if self._length <> int(count):
+                    raise ValueError("Corrupt database? %i entries not %i" \
+                                     % (int(count), self._length))
+            except _OperationalError, err:
+                raise ValueError("Not a Biopython index database? %s" % err)
         else :
             #Create the index
             con = _sqlite.connect(index_filename)
+            self._con = con
             # Sqlite PRAGMA settings for speed
             con.execute("PRAGMA syncronous='OFF'")
             con.execute("PRAGMA locking_mode=EXCLUSIVE")
             #Don't index the key column until the end (faster)
-            #con.execute("CREATE TABLE data (key TEXT PRIMARY KEY, "
+            #con.execute("CREATE TABLE offset_data (key TEXT PRIMARY KEY, "
             #                  "offset INTEGER);")
-            con.execute("CREATE TABLE data (key TEXT, offset INTEGER);")
+            con.execute("CREATE TABLE meta_data (key TEXT, value TEXT);")
+            con.execute("INSERT INTO meta_data (key, value) VALUES (?,?);",
+                        ("count", -1))
+            con.execute("CREATE TABLE offset_data (key TEXT, offset INTEGER);")
             offsets = iter(offsets) #in case it was a list!
+            count = 0
             while True:
                 batch = list(itertools.islice(offsets, 10000))
                 if not batch: break
-                con.executemany("INSERT INTO data (key,offset) VALUES (?,?);",
+                con.executemany("INSERT INTO offset_data (key,offset) VALUES (?,?);",
                                 batch)
                 con.commit()
+                count += len(batch)
+            self._length = count
             try:
                 con.execute("CREATE UNIQUE INDEX IF NOT EXISTS "
-                            "key_index ON data(key);")
+                            "key_index ON offset_data(key);")
             except _IntegrityError, err:
                 raise ValueError("Duplicate key? %s" % err)
             con.execute("PRAGMA locking_mode=NORMAL")
-            self._con = con
+            con.execute("UPDATE meta_data SET value = ? WHERE key = ?;",
+                        (count, "count"))
+            con.commit()
     
     def __contains__(self, key) :
-        return bool(self._con.execute("SELECT key FROM data WHERE key=?;",(key,)).fetchone())
+        return bool(self._con.execute("SELECT key FROM offset_data WHERE key=?;",
+                                      (key,)).fetchone())
         
     def __setitem__(self, key, offset):
         """A dictionary method which we don't implement."""
         raise NotImplementedError()
 
     def __getitem__(self, key) :
-        row = self._con.execute("SELECT offset FROM data WHERE key=?;",(key,)).fetchone()
+        row = self._con.execute("SELECT offset FROM offset_data WHERE key=?;",
+                                (key,)).fetchone()
         if not row: raise KeyError
         return row[0]
 
     def __len__(self):
         """How many records are there?"""
-        return self._con.execute("SELECT COUNT(key) FROM data;").fetchone()[0]
+        return self._length
+        #return self._con.execute("SELECT COUNT(key) FROM offset_data;").fetchone()[0]
 
     def keys(self) :
         """Return a list of all the keys (SeqRecord identifiers)."""
         #TODO - Stick a warning in here for large lists? Or just refuse?
         return [str(row[0]) for row in \
-                self._con.execute("SELECT key FROM data;").fetchall()]
+                self._con.execute("SELECT key FROM offset_data;").fetchall()]
 
     def values(self):
         """Would be a list of the offsets (integers)."""
         return [row[0] for row in \
-                self._con.execute("SELECT offset FROM data;").fetchall()]
+                self._con.execute("SELECT offset FROM offset_data;").fetchall()]
 
     def items(self):
         """List of (key, offset) tuples."""
         return [(str(row[0]),row[1]) for row in \
-                self._con.execute("SELECT key, offset FROM data;").fetchall()]
+                self._con.execute("SELECT key, offset FROM offset_data;").fetchall()]
 
     def iteritems(self):
         """Iterate over the (key, SeqRecord) items."""
