@@ -22,6 +22,7 @@ import os
 import re
 from sqlite3 import dbapi2 as _sqlite
 from sqlite3 import IntegrityError as _IntegrityError
+import itertools
 import UserDict
 
 from Bio import SeqIO
@@ -259,9 +260,13 @@ class _SqliteOffsetDict(UserDict.DictMixin):
             #con.execute("CREATE TABLE data (key TEXT PRIMARY KEY, "
             #                  "offset INTEGER);")
             con.execute("CREATE TABLE data (key TEXT, offset INTEGER);")
-            con.executemany("INSERT INTO data (key,offset) VALUES (?,?);",
-                            offsets)
-            con.commit()
+            offsets = iter(offsets) #in case it was a list!
+            while True:
+                batch = list(itertools.islice(offsets, 10000))
+                if not batch: break
+                con.executemany("INSERT INTO data (key,offset) VALUES (?,?);",
+                                batch)
+                con.commit()
             try:
                 con.execute("CREATE UNIQUE INDEX IF NOT EXISTS "
                             "key_index ON data(key);")
