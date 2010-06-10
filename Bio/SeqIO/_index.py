@@ -171,6 +171,10 @@ class _IndexedSeqFileDict(UserDict.DictMixin):
                                   "sequence file you cannot access all the "
                                   "records at once.")
 
+    def __iter__(self):
+        """Iterate over the keys."""
+        return iter(self._offsets)
+        
     def iteritems(self):
         """Iterate over the (key, SeqRecord) items."""
         for key in self.__iter__():
@@ -317,6 +321,11 @@ class _SqliteOffsetDict(UserDict.DictMixin):
         """How many records are there?"""
         return self._length
         #return self._con.execute("SELECT COUNT(key) FROM offset_data;").fetchone()[0]
+
+    def __iter__(self):
+        """Iterate over the keys."""
+        for row in self._con.execute("SELECT key FROM offset_data;"):
+            yield str(row[0])
 
     def keys(self) :
         """Return a list of all the keys (SeqRecord identifiers)."""

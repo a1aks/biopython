@@ -34,6 +34,7 @@ class IndexDictTests(unittest.TestCase):
 	self.assert_(hasattr(rec_dict, "_offsets"))
 	self.assert_(hasattr(rec_dict._offsets, "_con"))
         self.assertEqual(set(id_list), set(rec_dict.keys()))
+        self.assertEqual(set(id_list), set(rec_dict))
         #This is redundant, I just want to make sure len works:
         self.assertEqual(len(id_list), len(rec_dict))
         #Make sure boolean evaluation works
