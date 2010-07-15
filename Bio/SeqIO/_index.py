@@ -24,6 +24,8 @@ temp lookup file might be one idea (e.g. using SQLite or an OBDA style index).
 """
 
 import re
+from io import StringIO
+
 from Bio import SeqIO
 from Bio import Alphabet
 
@@ -51,11 +53,7 @@ class _IndexedSeqFileDict(dict):
     def __init__(self, filename, format, alphabet, key_function):
         #Use key_function=None for default value
         dict.__init__(self) #init as empty dict!
-        if format in SeqIO._BinaryFormats:
-            mode = "rb"
-        else:
-            mode = "rU"
-        self._handle = open(filename, mode)
+        self._handle = open(filename, "rb")
         self._alphabet = alphabet
         self._format = format
         self._key_function = key_function
@@ -133,9 +131,8 @@ class _IndexedSeqFileDict(dict):
     def __getitem__(self, key):
         """x.__getitem__(y) <==> x[y]"""
         #For non-trivial file formats this must be over-ridden in the subclass
-        handle = self._handle
-        handle.seek(dict.__getitem__(self, key))
-        record = next(SeqIO.parse(handle, self._format, self._alphabet))
+        record = next(SeqIO.parse(StringIO(self.get_raw(key)),
+                                  self._format, self._alphabet))
         if self._key_function:
             assert self._key_function(record.id) == key, \
                    "Requested key %s, found record.id %s which has key %s" \
@@ -280,7 +277,7 @@ class SequentialSeqFileDict(_IndexedSeqFileDict):
                   "pir" : ">..;",
                   "qual": ">",
                    }[self._format]
-        marker_re = re.compile("^%s" % marker)
+        marker_re = re.compile(("^%s" % marker).encode())
         marker_offset = len(marker)
         self._marker_re = marker_re #saved for the get_raw method
         while True:
@@ -290,7 +287,7 @@ class SequentialSeqFileDict(_IndexedSeqFileDict):
             if marker_re.match(line):
                 #Here we can assume the record.id is the first word after the
                 #marker. This is generally fine... but not for GenBank, EMBL, Swiss
-                yield line[marker_offset:].strip().split(None, 1)[0], offset
+                yield line[marker_offset:].strip().split(None, 1)[0].decode(), offset
 
     def get_raw(self, key):
         """Similar to the get method, but returns the record as a raw string."""
@@ -305,7 +302,7 @@ class SequentialSeqFileDict(_IndexedSeqFileDict):
                 #End of file, or start of next record => end of this record
                 break
             data += line
-        return data
+        return data.decode()
 
 #######################################
 # Fiddly indexers: GenBank, EMBL, ... #
@@ -315,7 +312,7 @@ class GenBankDict(SequentialSeqFileDict):
     """Indexed dictionary like access to a GenBank file."""
     def _build(self):
         handle = self._handle
-        marker_re = re.compile("^LOCUS ")
+        marker_re = re.compile(b"^LOCUS ")
         self._marker_re = marker_re #saved for the get_raw method
         while True:
             offset = handle.tell()
@@ -328,31 +325,31 @@ class GenBankDict(SequentialSeqFileDict):
                 done = False
                 while not done:
                     line = handle.readline()
-                    if line.startswith("ACCESSION "):
+                    if line.startswith(b"ACCESSION "):
                         key = line.rstrip().split()[1]
-                    elif line.startswith("VERSION "):
+                    elif line.startswith(b"VERSION "):
                         version_id = line.rstrip().split()[1]
-                        if version_id.count(".")==1 and version_id.split(".")[1].isdigit():
+                        if version_id.count(b".")==1 and version_id.split(b".")[1].isdigit():
                             #This should mimic the GenBank parser...
                             key = version_id
                             done = True
                             break
-                    elif line.startswith("FEATURES ") \
-                    or line.startswith("ORIGIN ") \
-                    or line.startswith("//") \
+                    elif line.startswith(b"FEATURES ") \
+                    or line.startswith(b"ORIGIN ") \
+                    or line.startswith(b"//") \
                     or marker_re.match(line) \
                     or not line:
                         done = True
                         break
                 if not key:
                     raise ValueError("Did not find ACCESSION/VERSION lines")
-                yield key, offset
+                yield key.decode(), offset
 
 class EmblDict(SequentialSeqFileDict):
     """Indexed dictionary like access to an EMBL file."""
     def _build(self):
         handle = self._handle
-        marker_re = re.compile("^ID ")
+        marker_re = re.compile(b"^ID ")
         self._marker_re = marker_re #saved for the get_raw method
         while True:
             offset = handle.tell()
@@ -361,39 +358,41 @@ class EmblDict(SequentialSeqFileDict):
             if marker_re.match(line):
                 #We cannot assume the record.id is the first word after ID,
                 #normally the SV line is used.
-                if line[2:].count(";") == 6:
+                if line[2:].count(b";") == 6:
                     #Looks like the semi colon separated style introduced in 2006
-                    parts = line[3:].rstrip().split(";")
-                    if parts[1].strip().startswith("SV "):
+                    parts = line[3:].rstrip().split(b";")
+                    if parts[1].strip().startswith(b"SV "):
                         #The SV bit gives the version
                         key = "%s.%s" \
-                              % (parts[0].strip(), parts[1].strip().split()[1])
+                              % (parts[0].strip().decode(),
+                                 parts[1].strip().split()[1].decode())
+                        key = key.encode() #the rest of this uses bytes
                     else:
                         key = parts[0].strip()
-                elif line[2:].count(";") == 3:
+                elif line[2:].count(b";") == 3:
                     #Looks like the pre 2006 style, take first word only
                     key = line[3:].strip().split(None,1)[0]
                 else:
                     raise ValueError('Did not recognise the ID line layout:\n' + line)
                 while True:
                     line = handle.readline()
-                    if line.startswith("SV "):
+                    if line.startswith(b"SV "):
                         key = line.rstrip().split()[1]
                         break
-                    elif line.startswith("FH ") \
-                    or line.startswith("FT ") \
-                    or line.startswith("SQ ") \
-                    or line.startswith("//") \
+                    elif line.startswith(b"FH ") \
+                    or line.startswith(b"FT ") \
+                    or line.startswith(b"SQ ") \
+                    or line.startswith(b"//") \
                     or marker_re.match(line) \
                     or not line:
                         break
-                yield key, offset
+                yield key.decode(), offset
 
 class SwissDict(SequentialSeqFileDict):
     """Indexed dictionary like access to a SwissProt file."""
     def _build(self):
         handle = self._handle
-        marker_re = re.compile("^ID ")
+        marker_re = re.compile(b"^ID ")
         self._marker_re = marker_re #saved for the get_raw method
         while True:
             offset = handle.tell()
@@ -403,15 +402,15 @@ class SwissDict(SequentialSeqFileDict):
                 #We cannot assume the record.id is the first word after ID,
                 #normally the following AC line is used.
                 line = handle.readline()
-                assert line.startswith("AC ")
-                key = line[3:].strip().split(";")[0].strip()
-                yield key, offset
+                assert line.startswith(b"AC ")
+                key = line[3:].strip().split(b";")[0].strip()
+                yield key.decode(), offset
 
 class IntelliGeneticsDict(SequentialSeqFileDict):
     """Indexed dictionary like access to a IntelliGenetics file."""
     def _build(self):
         handle = self._handle
-        marker_re = re.compile("^;")
+        marker_re = re.compile(b"^;")
         self._marker_re = marker_re #saved for the get_raw method
         while True:
             offset = handle.tell()
@@ -423,10 +422,31 @@ class IntelliGeneticsDict(SequentialSeqFileDict):
                     line = handle.readline()
                     if not line:
                         raise ValueError("Premature end of file?")
-                    if line[0] != ";" and line.strip():
+                    if line[0:1] != b";" and line.strip():
                         key = line.split()[0]
-                        yield key, offset
+                        yield key.decode(), offset
                         break
+
+    def get_raw(self, key):
+        """Similar to the get method, but returns the record as a raw string."""
+        #For non-trivial file formats this must be over-ridden in the subclass
+        handle = self._handle
+        marker_re = self._marker_re
+        handle.seek(dict.__getitem__(self, key))
+        data = handle.readline()
+        while True:
+            line = handle.readline()
+            data += line
+            if not line or not marker_re.match(line):
+                #End of header
+                break
+        while line:
+            line = handle.readline()
+            if not line or marker_re.match(line):
+                #End of record
+                break
+            data += line
+        return data.decode()
 
 class TabDict(_IndexedSeqFileDict):
     """Indexed dictionary like access to a simple tabbed file."""
@@ -437,7 +457,7 @@ class TabDict(_IndexedSeqFileDict):
             line = handle.readline()
             if not line : break #End of file
             try:
-                key = line.split("\t")[0]
+                key = line.split(b"\t")[0]
             except ValueError as err:
                 if not line.strip():
                     #Ignore blank lines
@@ -445,13 +465,13 @@ class TabDict(_IndexedSeqFileDict):
                 else:
                     raise err
             else:
-                yield key, offset
+                yield key.decode(), offset
 
     def get_raw(self, key):
         """Like the get method, but returns the record as a raw string."""
         handle = self._handle
         handle.seek(dict.__getitem__(self, key))
-        return handle.readline()
+        return handle.readline().decode()
 
 ##########################
 # Now the FASTQ indexers #
@@ -470,17 +490,17 @@ class FastqDict(_IndexedSeqFileDict):
         if not line:
             #Empty file!
             return
-        if line[0] != "@":
+        if line[0:1] != b"@":
             raise ValueError("Problem with FASTQ @ line:\n%s" % repr(line))
         while line:
             #assert line[0]=="@"
             #This record seems OK (so far)
-            yield line[1:].rstrip().split(None, 1)[0], pos
+            yield line[1:].rstrip().split(None, 1)[0].decode(), pos
             #Find the seq line(s)
             seq_len = 0
             while line:
                 line = handle.readline()
-                if line.startswith("+") : break
+                if line.startswith(b"+") : break
                 seq_len += len(line.strip())
             if not line:
                 raise ValueError("Premature end of file in seq section")
@@ -492,7 +512,7 @@ class FastqDict(_IndexedSeqFileDict):
                     #Should be end of record...
                     pos = handle.tell()
                     line = handle.readline()
-                    if line and line[0] != "@":
+                    if line and line[0:1] != b"@":
                         ValueError("Problem with line %s" % repr(line))
                     break
                 else:
@@ -509,9 +529,9 @@ class FastqDict(_IndexedSeqFileDict):
         handle.seek(dict.__getitem__(self, key))
         line = handle.readline()
         data = line
-        if line[0] != "@":
+        if line[0:1] != b"@":
             raise ValueError("Problem with FASTQ @ line:\n%s" % repr(line))
-        identifier = line[1:].rstrip().split(None, 1)[0]
+        identifier = line[1:].rstrip().split(None, 1)[0].decode()
         if self._key_function:
             identifier = self._key_function(identifier)
         if key != identifier:
@@ -521,11 +541,11 @@ class FastqDict(_IndexedSeqFileDict):
         while line:
             line = handle.readline()
             data += line
-            if line.startswith("+") : break
+            if line.startswith(b"+") : break
             seq_len += len(line.strip())
         if not line:
             raise ValueError("Premature end of file in seq section")
-        assert line[0]=="+"
+        assert line[0:1]==b"+"
         #Find the qual line(s)
         qual_len = 0
         while line:
@@ -533,7 +553,7 @@ class FastqDict(_IndexedSeqFileDict):
                 #Should be end of record...
                 pos = handle.tell()
                 line = handle.readline()
-                if line and line[0] != "@":
+                if line and line[0:1] != b"@":
                     ValueError("Problem with line %s" % repr(line))
                 break
             else:
@@ -542,7 +562,7 @@ class FastqDict(_IndexedSeqFileDict):
                 qual_len += len(line.strip())
         if seq_len != qual_len:
             raise ValueError("Problem with quality section")
-        return data
+        return data.decode()
 
 
 ###############################################################################
