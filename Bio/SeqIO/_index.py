@@ -274,7 +274,7 @@ class _SqliteOffsetDict(UserDict.DictMixin):
             con = _sqlite.connect(index_filename)
             self._con = con
             # Sqlite PRAGMA settings for speed
-            con.execute("PRAGMA syncronous='OFF'")
+            con.execute("PRAGMA synchronous='OFF'")
             con.execute("PRAGMA locking_mode=EXCLUSIVE")
             #Don't index the key column until the end (faster)
             #con.execute("CREATE TABLE offset_data (key TEXT PRIMARY KEY, "
