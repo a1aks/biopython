@@ -15,7 +15,7 @@ import unittest
 from StringIO import StringIO
 from Bio.SeqRecord import SeqRecord
 from Bio import SeqIO
-from Bio.SeqIO._index import _FormatToIndexedDict
+from Bio.SeqIO._index import _FormatToRandomAccess
 from Bio.Alphabet import generic_protein, generic_nucleotide, generic_dna
 
 from seq_tests_common import compare_record
@@ -110,8 +110,8 @@ class IndexDictTests(unittest.TestCase):
             self.assertEqual(key, rec_dict[key].id.lower())
             self.assertEqual(key, rec_dict.get(key).id.lower())
             raw = rec_dict.get_raw(key)
-            self.assertTrue(raw.strip())
-            self.assertTrue(raw in raw_file)
+            self.assertTrue(raw.strip(), key)
+            self.assertTrue(raw in raw_file, key)
             if format in ["ig"]:
                #These have a header structure and can't be parsed
                #individually (at least, not right now).
@@ -181,7 +181,8 @@ tests = [
     ("Roche/paired.sff", "sff-trim", None),
     ]
 for filename, format, alphabet in tests:
-    assert format in _FormatToIndexedDict
+    if format not in _FormatToRandomAccess: continue #hack!
+    assert format in _FormatToRandomAccess, format
     def funct(fn,fmt,alpha):
         f = lambda x : x.simple_check(fn, fmt, alpha)
         f.__doc__ = "Index %s file %s" % (fmt, fn)
