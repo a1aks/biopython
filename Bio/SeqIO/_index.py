@@ -23,11 +23,12 @@ sequencing. If this is an issue later on, storing the keys and offsets in a
 temp lookup file might be one idea (e.g. using SQLite or an OBDA style index).
 """
 
+import UserDict
 import re
 from Bio import SeqIO
 from Bio import Alphabet
 
-class _IndexedSeqFileDict(dict):
+class _IndexedSeqFileDict(UserDict.DictMixin):
     """Read only dictionary interface to a sequential sequence file.
 
     Keeps the keys in memory, reads the file to access entries as
@@ -50,18 +51,19 @@ class _IndexedSeqFileDict(dict):
     """
     def __init__(self, random_access_proxy, key_function):
         #Use key_function=None for default value
-        dict.__init__(self) #init as empty dict!
         self._proxy = random_access_proxy
         self._key_function = key_function
         if key_function:
             offset_iter = ((key_function(k),o) for (k,o) in random_access_proxy)
         else:
             offset_iter = random_access_proxy
+        offsets = {}
         for key, offset in offset_iter:
-            if key in self:
+            if key in offsets:
                 raise ValueError("Duplicate key '%s'" % key)
             else:
-                dict.__setitem__(self, key, offset)
+                offsets[key] = offset
+        self._offsets = offsets
     
     def __repr__(self):
         return "SeqIO.index('%s', '%s', alphabet=%s, key_function=%s)" \
@@ -73,6 +75,22 @@ class _IndexedSeqFileDict(dict):
             return "{%s : SeqRecord(...), ...}" % repr(self.keys()[0])
         else:
             return "{}"
+
+    def __contains__(self, key) :
+        return key in self._offsets
+        
+    def _get_offset(self, key) :
+        #Separate method to help ease complex subclassing like SFF
+        return self._offsets[key]
+
+    def __len__(self):
+        """How many records are there?"""
+        return len(self._offsets)
+
+    def keys(self) :
+        """Return a list of all the keys (SeqRecord identifiers)."""
+        #TODO - Stick a warning in here for large lists? Or just refuse?
+        return self._offsets.keys()
 
     if hasattr(dict, "iteritems"):
         #Python 2, use iteritems but not items etc
@@ -116,11 +134,14 @@ class _IndexedSeqFileDict(dict):
             for key in self.__iter__():
                 yield self.__getitem__(key)
 
-
+    def __iter__(self):
+        """Iterate over the keys."""
+        return iter(self._offsets)
+        
     def __getitem__(self, key):
         """x.__getitem__(y) <==> x[y]"""
         #Pass the offset to the proxy
-        record = self._proxy.get(dict.__getitem__(self, key))
+        record = self._proxy.get(self._offsets[key])
         if self._key_function:
             key2 = self._key_function(record.id)
         else:
@@ -144,7 +165,7 @@ class _IndexedSeqFileDict(dict):
         NOTE - This functionality is not supported for every file format.
         """
         #Pass the offset to the proxy
-        return self._proxy.get_raw(dict.__getitem__(self, key))
+        return self._proxy.get_raw(self._offsets[key])
 
     def __setitem__(self, key, value):
         """Would allow setting or replacing records, but not implemented."""
