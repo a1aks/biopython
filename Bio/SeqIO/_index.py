@@ -239,12 +239,19 @@ class SeqFileRandomAccess(object):
 
 class SffRandomAccess(SeqFileRandomAccess):
     """Random access to a Standard Flowgram Format (SFF) file."""
+    def __init__(self, filename, format, alphabet):
+        SeqFileRandomAccess.__init__(self, filename, format, alphabet)
+        header_length, index_offset, index_length, number_of_reads, \
+        self._flows_per_read, self._flow_chars, self._key_sequence \
+            = SeqIO.SffIO._sff_file_header(self._handle)
+
     def __iter__(self):
         """Load any index block in the file, or build it the slow way (PRIVATE)."""
         if self._alphabet is None:
             self._alphabet = Alphabet.generic_dna
         handle = self._handle
-        #Record the what we'll need for parsing a record given its offset
+        handle.seek(0)
+        #Alread did this in __init__ but need handle in right place
         header_length, index_offset, index_length, number_of_reads, \
         self._flows_per_read, self._flow_chars, self._key_sequence \
             = SeqIO.SffIO._sff_file_header(handle)
