@@ -181,7 +181,6 @@ tests = [
     ("Roche/paired.sff", "sff-trim", None),
     ]
 for filename, format, alphabet in tests:
-    if format not in _FormatToRandomAccess: continue #hack!
     assert format in _FormatToRandomAccess, format
     def funct(fn,fmt,alpha):
         f = lambda x : x.simple_check(fn, fmt, alpha)
