@@ -665,7 +665,6 @@ def index(filename, format, alphabet=None, key_function=None, db=None):
     """Indexes a sequence file and returns a dictionary like object.
 
      - filename - string giving name of file to be indexed
-     - index_filename - string giving filename for SQLite index
      - format   - lower case string describing the file format
      - alphabet - optional Alphabet object, useful when the sequence type
                   cannot be automatically inferred from the file itself
