@@ -24,6 +24,11 @@ Wrappers for the new NCBI BLAST+ tools (written in C++):
 - NcbirpsblastCommandline - Reverse Position Specific BLAST
 - NcbirpstblastnCommandline - Translated Reverse Position Specific BLAST
 
+For further details, see:
+
+Camacho et al. BLAST+: architecture and applications
+BMC Bioinformatics 2009, 10:421
+doi:10.1186/1471-2105-10-421
 """
 from Bio.Application import _Option, AbstractCommandline, _Switch
 
@@ -171,6 +176,8 @@ class BlastallCommandline(_BlastAllOrPgpCommandLine):
     """
     #TODO - This could use more checking for valid parameters to the program.
     def __init__(self, cmd="blastall",**kwargs):
+        import warnings
+        warnings.warn("Like blastall, this wrapper is now obsolete, and will be deprecated and removed in a future release of Biopython.", PendingDeprecationWarning)
         self.parameters = [ \
             #Sorted in the same order as the output from blastall --help
             #which should make it easier to keep them up to date in future.
@@ -255,6 +262,8 @@ class BlastpgpCommandline(_BlastAllOrPgpCommandLine):
     as described in the Biopython tutorial.
     """
     def __init__(self, cmd="blastpgp",**kwargs):
+        import warnings
+        warnings.warn("Like blastpgp (and blastall), this wrapper is now obsolete, and will be deprecated and removed in a future release of Biopython.", PendingDeprecationWarning)
         self.parameters = [ \
            _Option(["-C", "checkpoint_outfile"], ["output", "file"], None, 0,
                    "Output file for PSI-BLAST checkpointing.", False),
@@ -312,6 +321,8 @@ class RpsBlastCommandline(_BlastCommandLine):
     as described in the Biopython tutorial.
     """
     def __init__(self, cmd="rpsblast",**kwargs):
+        import warnings
+        warnings.warn("Like the old rpsblast (and blastall), this wrapper is now obsolete, and will be deprecated and removed in a future release of Biopython.", PendingDeprecationWarning)
         self.parameters = [ \
            #Note -N is also in blastpgp, but not blastall
            _Option(["-N", "nbits_gapping"], ["input"], None, 0, 
@@ -332,7 +343,7 @@ class RpsBlastCommandline(_BlastCommandLine):
 
    
 class _NcbiblastCommandline(AbstractCommandline):
-    """Base Commandline object for (classic) NCBI BLAST wrappers (PRIVATE).
+    """Base Commandline object for (new) NCBI BLAST+ wrappers (PRIVATE).
 
     This is provided for subclassing, it deals with shared options
     common to all the BLAST tools (blastn, rpsblast, rpsblast, etc).
@@ -393,12 +404,17 @@ class _NcbiblastCommandline(AbstractCommandline):
             _Option(["-gilist", "gilist"], ["input", "file"], None, 0,
                     """Restrict search of database to list of GI's.
  
-                    Incompatible with: negative_gilist, remote, subject, subject_loc""",
+                    Incompatible with: negative_gilist, seqidlist, remote, subject, subject_loc""",
                     False),
             _Option(["-negative_gilist", "negative_gilist"], ["input", "file"], None, 0,
                     """Restrict search of database to everything except the listed GIs.
  
-                    Incompatible with: gilist, remote, subject, subject_loc""",
+                    Incompatible with: gilist, seqidlist, remote, subject, subject_loc""",
+                    False),
+            _Option(["-seqidlist", "seqidlist"], ["input", "file"], None, 0,
+                    """Restrict search of database to list of SeqID's.
+ 
+                    Incompatible with: gilist, negative_gilist, remote, subject, subject_loc""",
                     False),
             _Option(["-entrez_query", "entrez_query"], ["input"], None, 0,
                     "Restrict search with the given Entrez query (requires remote).", False),
@@ -460,7 +476,8 @@ class _NcbiblastCommandline(AbstractCommandline):
     def _validate(self):
         incompatibles = {"remote":["gilist", "negative_gilist", "num_threads"],
                          "import_search_strategy" : ["export_search_strategy"],
-                         "gilist":["negative_gilist"]}
+                         "gilist":["negative_gilist"],
+                         "seqidlist":["gilist", "negative_gilist", "remote"]}
         self._validate_incompatibilities(incompatibles)
         if self.entrez_query and not self.remote :
             raise ValueError("Option entrez_query requires remote option.")
@@ -475,7 +492,7 @@ class _NcbiblastCommandline(AbstractCommandline):
                                          % (a,b))
 
 class _Ncbiblast2SeqCommandline(_NcbiblastCommandline):
-    """Base Commandline object for (classic) NCBI BLAST wrappers (PRIVATE).
+    """Base Commandline object for (new) NCBI BLAST+ wrappers (PRIVATE).
 
     This is provided for subclassing, it deals with shared options
     common to all the BLAST tools supporting two-sequence BLAST
@@ -531,9 +548,9 @@ class _Ncbiblast2SeqCommandline(_NcbiblastCommandline):
 
 
     def _validate(self):
-        incompatibles = {"subject_loc":["db, gilist, negative_gilist, remote"],
+        incompatibles = {"subject_loc":["db", "gilist", "negative_gilist", "seqidlist", "remote"],
                          "culling_limit":["best_hit_overhang","best_hit_score_edge"],
-                         "subject":["db", "gilist", "negative_gilist"]}
+                         "subject":["db", "gilist", "negative_gilist", "seqidlist"]}
         self._validate_incompatibilities(incompatibles)
         _NcbiblastCommandline._validate(self)
 
@@ -692,6 +709,13 @@ class NcbiblastnCommandline(_Ncbiblast2SeqCommandline):
                     "Minimum raw gapped score to keep an alignment in the preliminary gapped and traceback stages (integer).", False),
             _Switch(["-ungapped", "ungapped"], ["input"],
                     "Perform ungapped alignment only?"),
+            _Option(["-off_diagonal_range", "off_diagonal_range"], ["input"], None, 0,
+                    """Number of off-diagonals to search for the 2nd hit (integer).
+                    
+                    Expects a positive integer, or 0 (default) to turn off.
+                    
+                    Added in BLAST 2.2.23+
+                    """, False),
             ]
         _Ncbiblast2SeqCommandline.__init__(self, cmd, **kwargs)
 
@@ -826,6 +850,12 @@ class NcbitblastnCommandline(_Ncbiblast2SeqCommandline):
 
                     Format: "yes", "window locut hicut", or "no" to disable.
                     Default is "12 2.2 2.5""", False),
+            #Restrict search or results:
+            _Option(["-db_soft_mask", "db_soft_mask"], ["input"], None, 0,
+                    """Filtering algorithm ID to apply to the BLAST database as soft masking (string).
+                    
+                    Incompatible with: subject, subject_loc
+                    """, False),
             #Extension options:
             _Switch(["-ungapped", "ungapped"], ["input"],
                     "Perform ungapped alignment only?"),
@@ -897,6 +927,12 @@ class NcbitblastxCommandline(_Ncbiblast2SeqCommandline):
 
                     Format: "yes", "window locut hicut", or "no" to disable.
                     Default is "12 2.2 2.5""", False),
+            #Restrict search or results:
+            _Option(["-db_soft_mask", "db_soft_mask"], ["input"], None, 0,
+                    """Filtering algorithm ID to apply to the BLAST database as soft masking (string).
+                    
+                    Incompatible with: subject, subject_loc
+                    """, False),
            ]
         _Ncbiblast2SeqCommandline.__init__(self, cmd, **kwargs)
 

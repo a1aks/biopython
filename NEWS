@@ -9,9 +9,100 @@ The latest news is at the top.
 
 ===================================================================
 
+In progress: Biopython 1.56 (not yet released).
+
+This is planned to be our last release to support Python 2.4, however this
+could be delayed given feedback from our users (e.g. if this proves to be a
+problem in combination with other libraries or a popular Linux distribution).
+
+Bio.SeqIO can now read and write IMGT files, a variant of the EMBL sequence
+text file format with longer feature indentation, and protein EMBL files
+(used in the EMBL patents database file epo_prt.dat).
+
+(At least) 9 people have contributed to this release, include 4 new people:
+
+Bart de Koning
+Bartek Wilczynski
+Bartosz Telenczuk (first contribution)
+Cymon Cox
+Eric Talevich
+Michiel de Hoon
+Peter Cock
+Siong Kong (first contribution)
+Uri Laserson (first contribution)
+
+===================================================================
+
+31 August 2010: Biopython 1.55 released.
+
+See the notes below for the Biopython 1.55 beta release for changes since
+Biopython 1.54 was released. Since the beta release we have marked a few
+modules as obsolete or deprecated, and removed some deprecated code. There
+have also been a few bug fixes, extra unit tests, and documentation
+improvements.
+
+(At least) 12 people have contributed to this release, including 6 new people:
+
+Andres Colubri (first contribution)
+Carlos Rios Vera (first contribution)
+Claude Paroz (first contribution)
+Cymon Cox
+Eric Talevich
+Frank Kauff
+Joao Rodrigues (first contribution)
+Konstantin Okonechnikov (first contribution)
+Michiel de Hoon
+Nathan Edwards (first contribution)
+Peter Cock
+Tiago Antao
+
+===================================================================
+
+18 August 2010: Biopython 1.55 beta released.
+
+This is a beta release for testing purposes, both for new features added,
+and more importantly updates to avoid code deprecated in Python 2.7 or in
+Python 3. This is an important step towards Python 3 support.
+
+We are phasing out support for Python 2.4. We will continue to support it
+for at least one further release (Biopython 1.56). This could be delayed
+given feedback from our users (e.g. if this proves to be a problem in
+combination with other libraries or a popular Linux distribution).
+
 The SeqRecord object now has upper and lower methods (like the Seq object and
 Python strings), which return a new SeqRecord with the sequence in upper or
 lower case and a copy of all the annotation unchanged.
+
+Several small issues with Bio.PDB have been resolved, which includes better
+handling of model numbers, and files missing the element column.
+
+Feature location parsing for GenBank and EMBL files has been rewritten,
+making the parser much faster.
+
+Ace parsing by SeqIO now uses zero rather than None for the quality score of
+any gaps (insertions) in the contig sequence.
+
+The BioSQL classes DBServer and BioSeqDatabase now act more like Python
+dictionaries, making it easier to count, delete, iterate over, or check for
+membership of namespaces and records.
+
+The command line tool application wrapper classes are now executable, so you
+can use them to call the tool (using the subprocess module internally) and
+capture the output and any error messages as strings (stdout and stderr).
+This avoids having to worry about the details of how best to use subprocess.
+
+(At least) 10 people have contributed to this release, including 5 new people:
+
+Andres Colubri (first contribution)
+Carlos Rios Vera (first contribution)
+Claude Paroz (first contribution)
+Eric Talevich
+Frank Kauff
+Joao Rodrigues (first contribution)
+Konstantin Okonechnikov (first contribution)
+Michiel de Hoon
+Peter Cock
+Tiago Antao
 
 ===================================================================
 

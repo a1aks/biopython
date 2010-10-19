@@ -19,9 +19,9 @@ from Bio.Align import MultipleSeqAlignment
 from Bio.Seq import Seq
 from Bio.SeqFeature import SeqFeature, FeatureLocation
 from Bio.SeqRecord import SeqRecord
+import Bio
 
-import BaseTree
-import _sugar
+from Bio.Phylo import BaseTree
 
 
 class PhyloXMLWarning(Warning):
@@ -62,12 +62,12 @@ class Phyloxml(PhyloElement):
         if isinstance(index, int) or isinstance(index, slice):
             return self.phylogenies[index]
         if not isinstance(index, basestring):
-            raise KeyError, "can't use %s as an index" % type(index)
+            raise KeyError("can't use %s as an index" % type(index))
         for tree in self.phylogenies:
             if tree.name == index:
                 return tree
         else:
-            raise KeyError, "no phylogeny found with name " + repr(index)
+            raise KeyError("no phylogeny found with name " + repr(index))
 
     def __iter__(self):
         """Iterate through the phylogenetic trees in this object."""
@@ -153,8 +153,12 @@ class Phylogeny(PhyloElement, BaseTree.Tree):
 
     @classmethod
     def from_tree(cls, tree, **kwargs):
+        """Create a new Phylogeny given a Tree (from Newick/Nexus or BaseTree).
+
+        Keyword arguments are the usual Phylogeny constructor parameters.
+        """
         phy = cls(
-                root=Clade.from_subtree(tree.root),
+                root=Clade.from_clade(tree.root),
                 rooted=tree.rooted,
                 name=tree.name,
                 id=(tree.id is not None) and Id(str(tree.id)) or None)
@@ -162,11 +166,37 @@ class Phylogeny(PhyloElement, BaseTree.Tree):
         return phy
 
     @classmethod
-    def from_subtree(cls, subtree, **kwargs):
-        return Clade.from_subtree(subtree).to_phylogeny(**kwargs)
+    def from_clade(cls, clade, **kwargs):
+        """Create a new Phylogeny given a Newick or BaseTree Clade object.
 
+        Keyword arguments are the usual PhyloXML Clade constructor parameters.
+        """
+        return Clade.from_clade(clade).to_phylogeny(**kwargs)
+
+    # XXX Backward compatibility shim -- remove in Biopython 1.56
+    @classmethod
+    def from_subtree(cls, clade, **kwargs):
+        """DEPRECATED: use from_clade() instead."""
+        warnings.warn("use from_clade() instead.""",
+                Bio.BiopythonDeprecationWarning, stacklevel=2)
+        return cls.from_clade(clade, **kwargs)
+
+    def as_phyloxml(self):
+        """Return this tree, a PhyloXML-compatible Phylogeny object.
+
+        Overrides the BaseTree method.
+        """
+        return self
+
+    # XXX Backward compatibility shim -- remove in Biopython 1.56
     def to_phyloxml(self, **kwargs):
-        """Create a new PhyloXML object containing just this phylogeny."""
+        """DEPRECATED: use to_phyloxml_container instead."""
+        warnings.warn("use to_phyloxml_container() instead.""",
+                      Bio.BiopythonDeprecationWarning, stacklevel=2)
+        return self.to_phyloxml_container(**kwargs)
+
+    def to_phyloxml_container(self, **kwargs):
+        """Create a new Phyloxml object containing just this phylogeny."""
         return Phyloxml(kwargs, phylogenies=[self])
 
     def to_alignment(self):
@@ -276,13 +306,24 @@ class Clade(PhyloElement, BaseTree.Clade):
         self.other = other or []
 
     @classmethod
-    def from_subtree(cls, subtree, **kwargs):
-        """Create a new Clade from a BaseTree.Clade object."""
-        clade = cls(branch_length=subtree.branch_length,
-                    name=subtree.name)
-        clade.clades = [cls.from_subtree(st) for st in subtree.clades]
-        clade.__dict__.update(kwargs)
-        return clade
+    def from_clade(cls, clade, **kwargs):
+        """Create a new PhyloXML Clade from a Newick or BaseTree Clade object.
+        
+        Keyword arguments are the usual PhyloXML Clade constructor parameters.
+        """
+        new_clade = cls(branch_length=clade.branch_length,
+                    name=clade.name)
+        new_clade.clades = [cls.from_clade(c) for c in clade]
+        new_clade.__dict__.update(kwargs)
+        return new_clade
+
+    # XXX Backward compatibility shim -- remove in Biopython 1.56
+    @classmethod
+    def from_subtree(cls, clade, **kwargs):
+        """DEPRECATED: use from_clade() instead."""
+        warnings.warn("use from_clade() instead.""",
+                Bio.BiopythonDeprecationWarning, stacklevel=2)
+        return cls.from_clade(clade, **kwargs)
 
     def to_phylogeny(self, **kwargs):
         """Create a new phylogeny containing just this clade."""
@@ -545,9 +586,8 @@ class BranchColor(PhyloElement):
 
     def __repr__(self):
         """Preserve the standard RGB order when representing this object."""
-        return ('%s(red=%d, green=%d, blue=%d)'
-                % (self.__class__.__name__, self.red, self.green, self.blue)
-                ).encode('utf-8')
+        return (u'%s(red=%d, green=%d, blue=%d)'
+                % (self.__class__.__name__, self.red, self.green, self.blue))
 
     def __str__(self):
         """Show the color's RGB values."""
@@ -671,23 +711,30 @@ class Events(PhyloElement):
         self.losses = losses
         self.confidence = confidence
 
-    def iteritems(self):
-        return ((k, v) for k, v in self.__dict__.iteritems() if v is not None)
-
-    def iterkeys(self):
-        return (k for k, v in self.__dict__.iteritems() if v is not None)
-
-    def itervalues(self):
-        return (v for v in self.__dict__.itervalues() if v is not None)
-
     def items(self):
-        return list(self.iteritems())
+        return [(k, v) for k, v in self.__dict__.iteritems() if v is not None]
 
     def keys(self):
-        return list(self.iterkeys())
+        return [k for k, v in self.__dict__.iteritems() if v is not None]
 
     def values(self):
-        return list(self.itervalues())
+        return [v for v in self.__dict__.itervalues() if v is not None]
+
+    # XXX Backwards compatibility shims -- remove in Biopython 1.56
+    def iteritems(self):
+        warnings.warn("use items() instead.""",
+                Bio.BiopythonDeprecationWarning, stacklevel=2)
+        return iter(self.items())
+
+    def iterkeys(self):
+        warnings.warn("use keys() instead.""",
+                Bio.BiopythonDeprecationWarning, stacklevel=2)
+        return iter(self.keys())
+
+    def itervalues(self):
+        warnings.warn("use values() instead.""",
+                Bio.BiopythonDeprecationWarning, stacklevel=2)
+        return iter(self.values())
 
     def __len__(self):
         return len(self.values())
@@ -707,7 +754,7 @@ class Events(PhyloElement):
         setattr(self, key, None)
 
     def __iter__(self):
-        return iter(self.iterkeys())
+        return iter(self.keys())
 
     def __contains__(self, key):
         return (hasattr(self, key) and getattr(self, key) is not None)

@@ -21,6 +21,7 @@ parse              Read multiple SwissProt records
 
 """
 
+from Bio._py3k import _as_string
 
 class Record:
     """Holds information from a SwissProt record.
@@ -134,6 +135,9 @@ def _read(handle):
     record = None
     unread = ""
     for line in handle:
+        #This is for Python 3 to cope with a binary handle (byte strings),
+        #or a text handle (unicode strings):
+        line = _as_string(line)
         key, value = line[:2], line[5:].rstrip()
         if unread:
             value = unread + " " + value
@@ -231,8 +235,10 @@ def _read(handle):
             record.organism = " ".join(record.organism)
             record.organelle   = record.organelle.rstrip()
             for reference in record.references:
-                reference.authors = " ".join(reference.authors)
-                reference.title = " ".join(reference.title)
+                reference.authors = " ".join(reference.authors).rstrip(";")
+                reference.title = " ".join(reference.title).rstrip(";")
+                if reference.title.startswith('"') and reference.title.endswith('"'):
+                    reference.title = reference.title[1:-1] #remove quotes
                 reference.location = " ".join(reference.location)
             record.sequence = "".join(_sequence_lines)
             return record
@@ -494,17 +500,18 @@ def _read_ft(record, line):
         to_res = int(line[16:22])
     except ValueError:
         to_res = line[16:22].lstrip()
-    description = line[29:70].rstrip()
     #if there is a feature_id (FTId), store it away
     if line[29:35]==r"/FTId=":
         ft_id = line[35:70].rstrip()[:-1]
+        description = ""
     else:
         ft_id =""
+        description = line[29:70].rstrip()
     if not name:  # is continuation of last one
         assert not from_res and not to_res
         name, from_res, to_res, old_description,old_ft_id = record.features[-1]
         del record.features[-1]
-        description = "%s %s" % (old_description, description)
+        description = ("%s %s" % (old_description, description)).strip()
 
         # special case -- VARSPLIC, reported by edvard@farmasi.uit.no
         if name == "VARSPLIC":

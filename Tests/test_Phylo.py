@@ -5,31 +5,68 @@
 
 """Unit tests for the Bio.Phylo module."""
 
+import sys
 import unittest
-import zipfile
-from itertools import izip
 from cStringIO import StringIO
 
 from Bio import Phylo
 from Bio.Phylo import PhyloXML
 
+# Example Newick and Nexus files
+EX_NEWICK = 'Nexus/int_node_labels.nwk'
+EX_NEXUS = 'Nexus/test_Nexus_input.nex'
 
 # Example PhyloXML files
 EX_APAF = 'PhyloXML/apaf.xml'
 EX_BCL2 = 'PhyloXML/bcl_2.xml'
 EX_PHYLO = 'PhyloXML/phyloxml_examples.xml'
-EX_MOLLUSCA = 'PhyloXML/ncbi_taxonomy_mollusca.xml.zip'
 
 
-def unzip(fname):
-    """Extract a single file from a Zip archive and return a handle to it."""
-    assert zipfile.is_zipfile(fname)
-    z = zipfile.ZipFile(fname)
-    return StringIO(z.read(z.filelist[0].filename))
+class IOTests(unittest.TestCase):
+    """Tests for parsing and writing the supported formats."""
+
+    def test_newick(self):
+        """Read a Newick file with one tree."""
+        tree = Phylo.read(EX_NEWICK, 'newick')
+        self.assertEqual(len(tree.get_terminals()), 28)
+
+    def test_newick(self):
+        """Parse a Nexus file with multiple trees."""
+        trees = list(Phylo.parse(EX_NEXUS, 'nexus'))
+        self.assertEqual(len(trees), 3)
+        for tree in trees:
+            self.assertEqual(len(tree.get_terminals()), 9)
+
+    def test_convert(self):
+        """Convert a tree between all supported formats."""
+        mem_file_1 = StringIO()
+        mem_file_3 = StringIO()
+        if sys.version_info[0] == 3:
+            from io import BytesIO
+            mem_file_2 = BytesIO()
+        else:
+            mem_file_2 = StringIO()
+        Phylo.convert(EX_NEWICK, 'newick', mem_file_1, 'nexus')
+        mem_file_1.seek(0)
+        Phylo.convert(mem_file_1, 'nexus', mem_file_2, 'phyloxml')
+        mem_file_2.seek(0)
+        Phylo.convert(mem_file_2, 'phyloxml', mem_file_3, 'newick')
+        mem_file_3.seek(0)
+        tree = Phylo.read(mem_file_3, 'newick')
+        self.assertEqual(len(tree.get_terminals()), 28)
 
 
 class TreeTests(unittest.TestCase):
     """Tests for methods on BaseTree.Tree objects."""
+    def test_root_with_outgroup(self):
+        """Tree.root_with_outgroup: reroot at a given clade."""
+        tree = Phylo.read(EX_APAF, 'phyloxml')
+        orig_num_tips = len(tree.get_terminals())
+        orig_tree_len = tree.total_branch_length()
+        tree.root_with_outgroup({'name': '19_NEMVE'}, {'name': '20_NEMVE'})
+        self.assertEqual(orig_num_tips, len(tree.get_terminals()))
+        self.assertAlmostEqual(orig_tree_len, tree.total_branch_length())
+
     # Magic method
     def test_str(self):
         """Tree.__str__: pretty-print to a string.
@@ -37,12 +74,10 @@ class TreeTests(unittest.TestCase):
         NB: The exact line counts are liable to change if the object
         constructors change.
         """
-        for source, count in izip(
-                (EX_APAF, EX_BCL2, unzip(EX_MOLLUSCA)),
-                (386, 747, 16207)):
+        for source, count in zip((EX_APAF, EX_BCL2), (386, 747)):
             tree = Phylo.read(source, 'phyloxml')
             output = str(tree)
-            self.assertEquals(len(output.splitlines()), count)
+            self.assertEqual(len(output.splitlines()), count)
 
 
 class MixinTests(unittest.TestCase):
@@ -58,14 +93,14 @@ class MixinTests(unittest.TestCase):
         tree = self.phylogenies[5]
         matches = list(tree.find_elements(PhyloXML.Taxonomy, code='OCTVU'))
         self.assertEqual(len(matches), 1)
-        self.assert_(isinstance(matches[0], PhyloXML.Taxonomy))
+        self.assertTrue(isinstance(matches[0], PhyloXML.Taxonomy))
         self.assertEqual(matches[0].code, 'OCTVU')
         self.assertEqual(matches[0].scientific_name, 'Octopus vulgaris')
         # Iteration and regexps
         tree = self.phylogenies[10]
-        for point, alt in izip(tree.find_elements(geodetic_datum=r'WGS\d{2}'),
+        for point, alt in zip(tree.find_elements(geodetic_datum=r'WGS\d{2}'),
                                (472, 10, 452)):
-            self.assert_(isinstance(point, PhyloXML.Point))
+            self.assertTrue(isinstance(point, PhyloXML.Point))
             self.assertEqual(point.geodetic_datum, 'WGS84')
             self.assertAlmostEqual(point.alt, alt)
         # class filter
@@ -85,19 +120,19 @@ class MixinTests(unittest.TestCase):
     def test_find_clades(self):
         """TreeMixin: find_clades() method."""
         # boolean filter
-        for clade, name in izip(self.phylogenies[10].find_clades(name=True),
+        for clade, name in zip(self.phylogenies[10].find_clades(name=True),
                                 list('ABCD')):
-            self.assert_(isinstance(clade, PhyloXML.Clade))
+            self.assertTrue(isinstance(clade, PhyloXML.Clade))
             self.assertEqual(clade.name, name)
         # finding deeper attributes
         octo = list(self.phylogenies[5].find_clades(code='OCTVU'))
         self.assertEqual(len(octo), 1)
-        self.assert_(isinstance(octo[0], PhyloXML.Clade))
+        self.assertTrue(isinstance(octo[0], PhyloXML.Clade))
         self.assertEqual(octo[0].taxonomies[0].code, 'OCTVU')
 
     def test_find_terminal(self):
         """TreeMixin: find_elements() with terminal argument."""
-        for tree, total, extern, intern in izip(
+        for tree, total, extern, intern in zip(
                 self.phylogenies,
                 (6, 6, 7, 18, 21, 27, 7, 9, 9, 19, 15, 9, 6),
                 (3, 3, 3, 3,  3,  3,  3, 3, 3, 3,  4,  3, 3),
@@ -144,7 +179,7 @@ class MixinTests(unittest.TestCase):
         tree = self.phylogenies[1]
         depths = tree.depths()
         self.assertEqual(len(depths), 5)
-        for found, expect in zip(sorted(depths.itervalues()),
+        for found, expect in zip(sorted(depths.values()),
                                  [0, 0.060, 0.162, 0.290, 0.400]):
             self.assertAlmostEqual(found, expect)
 
@@ -160,7 +195,7 @@ class MixinTests(unittest.TestCase):
 
     def test_is_bifurcating(self):
         """TreeMixin: is_bifurcating() method."""
-        for tree, is_b in izip(self.phylogenies,
+        for tree, is_b in zip(self.phylogenies,
                 (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1)):
             self.assertEqual(tree.is_bifurcating(), is_b)
 
@@ -234,7 +269,7 @@ class MixinTests(unittest.TestCase):
         parent = tree.prune(name='A')
         self.assertEqual(len(parent.clades), 2)
         for clade, name, blen in zip(parent, 'BC', (.29, .4)):
-            self.assert_(clade.is_terminal())
+            self.assertTrue(clade.is_terminal())
             self.assertEqual(clade.name, name)
             self.assertAlmostEqual(clade.branch_length, blen)
         self.assertEqual(len(tree.get_terminals()), 2)
@@ -245,7 +280,7 @@ class MixinTests(unittest.TestCase):
         self.assertEqual(parent, tree.root)
         self.assertEqual(len(parent.clades), 2)
         for clade, name, blen in zip(parent, 'AB', (.102, .23)):
-            self.assert_(clade.is_terminal())
+            self.assertTrue(clade.is_terminal())
             self.assertEqual(clade.name, name)
             self.assertAlmostEqual(clade.branch_length, blen)
         self.assertEqual(len(tree.get_terminals()), 2)
@@ -265,7 +300,7 @@ class MixinTests(unittest.TestCase):
         for clade, name, blen in zip(C[0],
                 ('C00', 'C01', 'C02'),
                 (0.5, 0.5, 0.5)):
-            self.assert_(clade.is_terminal())
+            self.assertTrue(clade.is_terminal())
             self.assertEqual(clade.name, name)
             self.assertEqual(clade.branch_length, blen)
 

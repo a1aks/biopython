@@ -4,6 +4,12 @@
 # as part of this package.
 
 """Additional unit tests for Bio.SeqIO.convert(...) function."""
+import sys
+if sys.version_info[0] >= 3:
+    from Bio import MissingExternalDependencyError
+    raise MissingExternalDependencyError(\
+        "Skipping since currently this is very slow on Python 3.")
+    
 import os
 import unittest
 from StringIO import StringIO
@@ -40,7 +46,7 @@ class IndexDictTests(unittest.TestCase):
         #Make sure boolean evaluation works
         self.assertEqual(bool(id_list), bool(rec_dict))
         for key in id_list:
-            self.assert_(key in rec_dict)
+            self.assertTrue(key in rec_dict)
             self.assertEqual(key, rec_dict[key].id)
             self.assertEqual(key, rec_dict.get(key).id)
         #Check non-existant keys,
@@ -51,13 +57,26 @@ class IndexDictTests(unittest.TestCase):
             pass
         self.assertEqual(rec_dict.get(chr(0)), None)
         self.assertEqual(rec_dict.get(chr(0), chr(1)), chr(1))
-        #Now check iteritems...
-        for key, rec in rec_dict.iteritems():
-            self.assert_(key in id_list)
-            self.assert_(isinstance(rec, SeqRecord))
-            self.assertEqual(rec.id, key)
-        #Now check non-defined methods...
-        self.assertRaises(NotImplementedError, rec_dict.values)
+        if hasattr(dict, "iteritems"):
+            #Python 2.x
+            for key, rec in rec_dict.iteritems():
+                self.assertTrue(key in id_list)
+                self.assertTrue(isinstance(rec, SeqRecord))
+                self.assertEqual(rec.id, key)
+            #Now check non-defined methods...
+            self.assertRaises(NotImplementedError, rec_dict.items)
+            self.assertRaises(NotImplementedError, rec_dict.values)
+        else:
+            #Python 3
+            assert not hasattr(rec_dict, "iteritems")
+            for key, rec in rec_dict.iteritems():
+                self.assertTrue(key in id_list)
+                self.assertTrue(isinstance(rec, SeqRecord))
+                self.assertEqual(rec.id, key)
+            for rec in rec_dict.itervalues():
+                self.assertTrue(key in id_list)
+                self.assertTrue(isinstance(rec, SeqRecord))
+        
         self.assertRaises(NotImplementedError, rec_dict.popitem)
         self.assertRaises(NotImplementedError, rec_dict.pop, chr(0))
         self.assertRaises(NotImplementedError, rec_dict.pop, chr(0), chr(1))
@@ -102,20 +121,19 @@ class IndexDictTests(unittest.TestCase):
         self.assertEqual(set(id_list), set(rec_dict.keys()))
         self.assertEqual(len(id_list), len(rec_dict))
         for key in id_list:
-            self.assert_(key in rec_dict)
+            self.assertTrue(key in rec_dict)
             self.assertEqual(key, rec_dict[key].id.lower())
             self.assertEqual(key, rec_dict.get(key).id.lower())
             raw = rec_dict.get_raw(key)
-            self.assert_(raw.strip())
-            self.assert_(raw in raw_file)
+            self.assertTrue(raw.strip())
+            self.assertTrue(raw in raw_file)
             if format in ["ig"]:
                #These have a header structure and can't be parsed
                #individually (at least, not right now).
                continue
             rec1 = rec_dict[key]
             rec2 = SeqIO.read(StringIO(raw), format, alphabet)
-	    self.assertEqual(True, compare_record(rec1, rec2))
-        #Done
+            self.assertEqual(True, compare_record(rec1, rec2))
 
     def test_duplicates_index_mem(self):
 	"""Index file with duplicate identifers with Bio.SeqIO.index() in mem"""
@@ -127,12 +145,12 @@ class IndexDictTests(unittest.TestCase):
 			  db="temp.idx")
 
     def test_duplicates_to_dict(self):
-	"""Index file with duplicate identifers with Bio.SeqIO.to_dict()"""
-	handle = open("Fasta/dups.fasta", "rU")
-	iterator = SeqIO.parse(handle, "fasta")
-	self.assertRaises(ValueError, SeqIO.to_dict, iterator)
-	handle.close()
-            
+        """Index file with duplicate identifers with Bio.SeqIO.to_dict()"""
+        handle = open("Fasta/dups.fasta", "rU")
+        iterator = SeqIO.parse(handle, "fasta")
+        self.assertRaises(ValueError, SeqIO.to_dict, iterator)
+        handle.close()
+
 tests = [
     ("Ace/contig1.ace", "ace", generic_dna),
     ("Ace/consed_sample.ace", "ace", None),
@@ -144,9 +162,11 @@ tests = [
     ("Quality/sanger_faked.fastq", "fastq-sanger", generic_dna),
     ("Quality/solexa_faked.fastq", "fastq-solexa", generic_dna),
     ("Quality/illumina_faked.fastq", "fastq-illumina", generic_dna),
+    ("EMBL/epo_prt_selection.embl", "embl", None),
     ("EMBL/U87107.embl", "embl", None),
     ("EMBL/TRBG361.embl", "embl", None),
     ("EMBL/A04195.imgt", "embl", None), #Not a proper EMBL file, an IMGT file
+    ("EMBL/A04195.imgt", "imgt", None),
     ("GenBank/NC_000932.faa", "fasta", generic_protein),
     ("GenBank/NC_005816.faa", "fasta", generic_protein),
     ("GenBank/NC_005816.tsv", "tab", generic_protein),

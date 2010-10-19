@@ -229,6 +229,8 @@ names are also used in Bio.AlignIO and include the following:
  - gb      - An alias for "genbank", for consistency with NCBI Entrez Utilities
  - ig      - The IntelliGenetics file format, apparently the same as the
              MASE alignment format.
+ - imgt    - An EMBL like format from IMGT where the feature tables are more
+             indented to allow for longer feature types.
  - phd     - Output from PHRED, used by PHRAP and CONSED for input.
  - pir     - A "FASTA like" format introduced by the National Biomedical
              Research Foundation (NBRF) for the Protein Information Resource
@@ -330,6 +332,7 @@ _FormatToIterator = {"fasta" : FastaIO.FastaIterator,
                      "genbank-cds" : InsdcIO.GenBankCdsFeatureIterator,
                      "embl" : InsdcIO.EmblIterator,
                      "embl-cds" : InsdcIO.EmblCdsFeatureIterator,
+                     "imgt" : InsdcIO.ImgtIterator,
                      "ig" : IgIO.IgIterator,
                      "swiss" : SwissIO.SwissIterator,
                      "phd" : PhdIO.PhdIterator,
@@ -350,6 +353,7 @@ _FormatToWriter = {"fasta" : FastaIO.FastaWriter,
                    "gb" : InsdcIO.GenBankWriter,
                    "genbank" : InsdcIO.GenBankWriter,
                    "embl" : InsdcIO.EmblWriter,
+                   "imgt" : InsdcIO.ImgtWriter,
                    "tab" : TabIO.TabWriter,
                    "fastq" : QualityIO.FastqPhredWriter,
                    "fastq-sanger" : QualityIO.FastqPhredWriter,
@@ -619,7 +623,7 @@ def to_dict(sequences, key_function=None):
     >>> filename = "GenBank/cor6_6.gb"
     >>> format = "genbank"
     >>> id_dict = SeqIO.to_dict(SeqIO.parse(filename, format))
-    >>> print sorted(id_dict.keys())
+    >>> print sorted(id_dict)
     ['AF297471.1', 'AJ237582.1', 'L31939.1', 'M81224.1', 'X55053.1', 'X62281.1']
     >>> print id_dict["L31939.1"].description
     Brassica rapa (clone bif72) kin mRNA, complete cds.
@@ -684,7 +688,7 @@ def index(filename, format, alphabet=None, key_function=None, db=None):
     >>> records = SeqIO.index("Quality/example.fastq", "fastq")
     >>> len(records)
     3
-    >>> sorted(records.keys())
+    >>> sorted(records)
     ['EAS54_6_R1_2_1_413_324', 'EAS54_6_R1_2_1_443_348', 'EAS54_6_R1_2_1_540_792']
     >>> print records["EAS54_6_R1_2_1_540_792"].format("fasta")
     >EAS54_6_R1_2_1_540_792
@@ -717,7 +721,7 @@ def index(filename, format, alphabet=None, key_function=None, db=None):
     >>> records = SeqIO.to_dict(SeqIO.parse(open("Quality/example.fastq"), "fastq"))
     >>> len(records)
     3
-    >>> sorted(records.keys())
+    >>> sorted(records)
     ['EAS54_6_R1_2_1_413_324', 'EAS54_6_R1_2_1_443_348', 'EAS54_6_R1_2_1_540_792']
     >>> print records["EAS54_6_R1_2_1_540_792"].format("fasta")
     >EAS54_6_R1_2_1_540_792
@@ -807,9 +811,10 @@ def to_alignment(sequences, alphabet=None, strict=True):
     >>> alignment = AlignIO.read(filename, "clustal")
     """
     import warnings
+    import Bio
     warnings.warn("The Bio.SeqIO.to_alignment(...) function is deprecated. "
                   "Please use the Bio.Align.MultipleSeqAlignment(...) object "
-                  "directly instead.", DeprecationWarning)
+                  "directly instead.", Bio.BiopythonDeprecationWarning)
     return MultipleSeqAlignment(sequences, alphabet)
 
 def convert(in_file, in_format, out_file, out_format, alphabet=None):

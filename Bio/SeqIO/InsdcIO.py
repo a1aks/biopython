@@ -8,7 +8,7 @@
 
 You are expected to use this module via the Bio.SeqIO functions.
 Note that internally this module calls Bio.GenBank to do the actual
-parsing of both GenBank and EMBL files.
+parsing of GenBank, EMBL and IMGT files.
 
 See also:
 
@@ -23,17 +23,25 @@ http://www.ebi.ac.uk/embl/
 
 DDBJ (DNA Data Bank of Japan)
 http://www.ddbj.nig.ac.jp/
+
+IMGT (use a variant of EMBL format with longer feature indents)
+http://imgt.cines.fr/download/LIGM-DB/userman_doc.html
+http://imgt.cines.fr/download/LIGM-DB/ftable_doc.html
+http://www.ebi.ac.uk/imgt/hla/docs/manual.html
+
 """
 
 from Bio.Seq import UnknownSeq
-from Bio.GenBank.Scanner import GenBankScanner, EmblScanner
+from Bio.GenBank.Scanner import GenBankScanner, EmblScanner, _ImgtScanner
 from Bio import Alphabet
 from Interfaces import SequentialSequenceWriter
 from Bio import SeqFeature
 
+from Bio._py3k import _is_int_or_long
+
 # NOTE
 # ====
-# The "brains" for parsing GenBank and EMBL files (and any
+# The "brains" for parsing GenBank, EMBL and IMGT files (and any
 # other flat file variants from the INSDC in future) is in
 # Bio.GenBank.Scanner (plus the _FeatureConsumer in Bio.GenBank)
 # However, all the writing code is in this file.
@@ -60,6 +68,17 @@ def EmblIterator(handle):
     one record."""
     #This calls a generator function:
     return EmblScanner(debug=0).parse_records(handle)
+
+def ImgtIterator(handle):
+    """Breaks up an IMGT file into SeqRecord objects.
+
+    Every section from the LOCUS line to the terminating // becomes
+    a single SeqRecord with associated annotation and features.
+    
+    Note that for genomes or chromosomes, there is typically only
+    one record."""
+    #This calls a generator function:
+    return _ImgtScanner(debug=0).parse_records(handle)
 
 def GenBankCdsFeatureIterator(handle, alphabet=Alphabet.generic_protein):
     """Breaks up a Genbank file into SeqRecord objects for each CDS feature.
@@ -108,7 +127,7 @@ def _insdc_feature_position_string(pos, offset=0):
         raise ValueError("Expected a SeqFeature position object.")
 
 
-def _insdc_location_string_ignoring_strand_and_subfeatures(feature):
+def _insdc_location_string_ignoring_strand_and_subfeatures(feature, rec_length):
     if feature.ref:
         ref = "%s:" % feature.ref
     else:
@@ -119,8 +138,14 @@ def _insdc_location_string_ignoring_strand_and_subfeatures(feature):
     and feature.location.start.position == feature.location.end.position:
         #Special case, for 12:12 return 12^13
         #(a zero length slice, meaning the point between two letters)
-        return "%s%i^%i" % (ref, feature.location.end.position,
-                            feature.location.end.position+1)
+        if feature.location.end.position == rec_length:
+            #Very special case, for a between position at the end of a
+            #sequence (used on some circular genomes, Bug 3098) we have
+            #N:N so return N^1
+            return "%s%i^1" % (ref, rec_length)
+        else:
+            return "%s%i^%i" % (ref, feature.location.end.position,
+                                feature.location.end.position+1)
     if isinstance(feature.location.start, SeqFeature.ExactPosition) \
     and isinstance(feature.location.end, SeqFeature.ExactPosition) \
     and feature.location.start.position+1 == feature.location.end.position:
@@ -134,7 +159,7 @@ def _insdc_location_string_ignoring_strand_and_subfeatures(feature):
                + ".." + \
                _insdc_feature_position_string(feature.location.end)
 
-def _insdc_feature_location_string(feature):
+def _insdc_feature_location_string(feature, rec_length):
     """Build a GenBank/EMBL location string from a SeqFeature (PRIVATE).
 
     There is a choice of how to show joins on the reverse complement strand,
@@ -161,7 +186,7 @@ def _insdc_feature_location_string(feature):
         #assert feature.location_operator == "", \
         #       "%s has no subfeatures but location_operator %s" \
         #       % (repr(feature), feature.location_operator)
-        location = _insdc_location_string_ignoring_strand_and_subfeatures(feature)
+        location = _insdc_location_string_ignoring_strand_and_subfeatures(feature, rec_length)
         if feature.strand == -1:
             location = "complement(%s)" % location
         return location
@@ -171,7 +196,7 @@ def _insdc_feature_location_string(feature):
             assert f.strand == -1
         return "complement(%s(%s))" \
                % (feature.location_operator,
-                  ",".join(_insdc_location_string_ignoring_strand_and_subfeatures(f) \
+                  ",".join(_insdc_location_string_ignoring_strand_and_subfeatures(f, rec_length) \
                            for f in feature.sub_features))
     #if feature.strand == +1:
     #    for f in feature.sub_features:
@@ -179,7 +204,7 @@ def _insdc_feature_location_string(feature):
     #This covers typical forward strand features, and also an evil mixed strand:
     assert feature.location_operator != ""
     return  "%s(%s)" % (feature.location_operator,
-                        ",".join([_insdc_feature_location_string(f) \
+                        ",".join([_insdc_feature_location_string(f, rec_length) \
                                   for f in feature.sub_features]))
 
 
@@ -198,7 +223,7 @@ class _InsdcWriter(SequentialSequenceWriter):
         #self.handle.write('%s/%s="%s"\n' % (self.QUALIFIER_INDENT_STR, key, value))
         if quote is None:
             #Try to mimic unwritten rules about when quotes can be left out:
-            if isinstance(value, int) or isinstance(value, long):
+            if _is_int_or_long(value):
                 quote = False
             else:
                 quote = True
@@ -239,10 +264,10 @@ class _InsdcWriter(SequentialSequenceWriter):
         return location[:index+1] + "\n" + \
                self.QUALIFIER_INDENT_STR + self._wrap_location(location[index+1:])
 
-    def _write_feature(self, feature):
+    def _write_feature(self, feature, record_length):
         """Write a single SeqFeature object to features table."""
         assert feature.type, feature
-        location = _insdc_feature_location_string(feature)
+        location = _insdc_feature_location_string(feature, record_length)
         line = (self.QUALIFIER_INDENT_TMP  % feature.type)[:self.QUALIFIER_INDENT] \
                + self._wrap_location(location) + "\n"
         self.handle.write(line)
@@ -275,28 +300,29 @@ class _InsdcWriter(SequentialSequenceWriter):
             return str(answer)
 
     def _split_multi_line(self, text, max_len):
-        "Returns a list of strings."""
+        """Returns a list of strings.
+        
+        Any single words which are too long get returned as a whole line
+        (e.g. URLs) without an exception or warning.
+        """
         #TODO - Do the line spliting while preserving white space?
         text = text.strip()
-        if len(text) < max_len:
+        if len(text) <= max_len:
             return [text]
 
         words = text.split()
-        assert max([len(w) for w in words]) < max_len, \
-               "Your description cannot be broken into nice lines!:\n%s" \
-               % repr(text)
         text = ""
-        while words and len(text) + 1 + len(words[0]) < max_len:
+        while words and len(text) + 1 + len(words[0]) <= max_len:
             text += " " + words.pop(0)
             text = text.strip()
-        assert len(text) < max_len
+        #assert len(text) <= max_len
         answer = [text]
         while words:
-            text = ""
-            while words and len(text) + 1 + len(words[0]) < max_len:
+            text = words.pop(0)
+            while words and len(text) + 1 + len(words[0]) <= max_len:
                 text += " " + words.pop(0)
                 text = text.strip()
-            assert len(text) < max_len
+            #assert len(text) <= max_len
             answer.append(text)
         assert not words
         return answer
@@ -331,8 +357,9 @@ class GenBankWriter(_InsdcWriter):
     def _write_single_line(self, tag, text):
         "Used in the the 'header' of each GenBank record."""
         assert len(tag) < self.HEADER_WIDTH
-        assert len(text) < self.MAX_WIDTH - self.HEADER_WIDTH, \
-               "Annotation %s too long for %s line" % (repr(text), tag)
+        if len(text) > self.MAX_WIDTH - self.HEADER_WIDTH:
+            import warnings
+            warnings.warn("Annotation %r too long for %s line" % (text, tag))
         self.handle.write("%s%s\n" % (tag.ljust(self.HEADER_WIDTH),
                                       text.replace("\n", " ")))
 
@@ -341,9 +368,8 @@ class GenBankWriter(_InsdcWriter):
         #TODO - Do the line spliting while preserving white space?
         max_len = self.MAX_WIDTH - self.HEADER_WIDTH
         lines = self._split_multi_line(text, max_len)
-        assert len(tag) < self.HEADER_WIDTH
         self._write_single_line(tag, lines[0])
-        for line in lines[1:] :
+        for line in lines[1:]:
             self._write_single_line("", line)
 
     def _write_multi_entries(self, tag, text_list):
@@ -365,7 +391,7 @@ class GenBankWriter(_InsdcWriter):
         if isinstance(date, list) and len(date)==1 :
             date = date[0]
         #TODO - allow a Python date object
-        if not isinstance(date, str) or len(date) != 11 \
+        if not isinstance(date, basestring) or len(date) != 11 \
         or date[2] != "-" or date[6] != "-" \
         or not date[:2].isdigit() or not date[7:].isdigit() \
         or int(date[:2]) > 31 \
@@ -702,8 +728,9 @@ class GenBankWriter(_InsdcWriter):
             self._write_comment(record)
 
         handle.write("FEATURES             Location/Qualifiers\n")
+        rec_length = len(record)
         for feature in record.features:
-            self._write_feature(feature) 
+            self._write_feature(feature, rec_length) 
         self._write_sequence(record)
         handle.write("//\n")
 
@@ -712,6 +739,7 @@ class EmblWriter(_InsdcWriter):
     QUALIFIER_INDENT = 21
     QUALIFIER_INDENT_STR = "FT" + " "*(QUALIFIER_INDENT-2)
     QUALIFIER_INDENT_TMP = "FT   %s                " # 21 if %s is empty
+    FEATURE_HEADER = "FH   Key             Location/Qualifiers\n"
     
     def _write_contig(self, record):
         max_len = self.MAX_WIDTH - self.HEADER_WIDTH
@@ -739,14 +767,20 @@ class EmblWriter(_InsdcWriter):
         data = self._get_seq_string(record) #Catches sequence being None
         seq_len = len(data)
         #TODO - Should we change the case?
-        #TODO - What if we have RNA?
-        a_count = data.count('A') + data.count('a')
-        c_count = data.count('C') + data.count('c')
-        g_count = data.count('G') + data.count('g')
-        t_count = data.count('T') + data.count('t')
-        other = seq_len - (a_count + c_count + g_count + t_count)
-        handle.write("SQ   Sequence %i BP; %i A; %i C; %i G; %i T; %i other;\n" \
-                     % (seq_len, a_count, c_count, g_count, t_count, other))
+
+        #Get the base alphabet (underneath any Gapped or StopCodon encoding)
+        a = Alphabet._get_base_alphabet(record.seq.alphabet)
+        if isinstance(a, Alphabet.DNAAlphabet):
+            #TODO - What if we have RNA?
+            a_count = data.count('A') + data.count('a')
+            c_count = data.count('C') + data.count('c')
+            g_count = data.count('G') + data.count('g')
+            t_count = data.count('T') + data.count('t')
+            other = seq_len - (a_count + c_count + g_count + t_count)
+            handle.write("SQ   Sequence %i BP; %i A; %i C; %i G; %i T; %i other;\n" \
+                         % (seq_len, a_count, c_count, g_count, t_count, other))
+        else:
+            handle.write("SQ   \n")
         
         for line_number in range(0, seq_len // LETTERS_PER_LINE):
             handle.write("    ") #Just four, not five
@@ -769,7 +803,9 @@ class EmblWriter(_InsdcWriter):
     def _write_single_line(self, tag, text):
         assert len(tag)==2
         line = tag+"   "+text
-        assert len(line) <= self.MAX_WIDTH, line
+        if len(text) > self.MAX_WIDTH:
+            import warnings
+            warnings.warn("Line %r too long" % line)
         self.handle.write(line+"\n")
 
     def _write_multi_line(self, tag, text):
@@ -805,15 +841,18 @@ class EmblWriter(_InsdcWriter):
         a = Alphabet._get_base_alphabet(record.seq.alphabet)
         if not isinstance(a, Alphabet.Alphabet):
             raise TypeError("Invalid alphabet")
-        elif not isinstance(a, Alphabet.NucleotideAlphabet):
-            raise ValueError("Need a Nucleotide alphabet")
         elif isinstance(a, Alphabet.DNAAlphabet):
             mol_type = "DNA"
+            units = "BP"
         elif isinstance(a, Alphabet.RNAAlphabet):
             mol_type = "RNA"
+            units = "BP"
+        elif isinstance(a, Alphabet.ProteinAlphabet):
+            mol_type = "PROTEIN"
+            units = "AA"
         else:
             #Must be something like NucleotideAlphabet
-            raise ValueError("Need a DNA or RNA alphabet")
+            raise ValueError("Need a DNA, RNA or Protein alphabet")
 
         #Get the taxonomy division
         division = self._get_data_division(record)
@@ -828,9 +867,9 @@ class EmblWriter(_InsdcWriter):
         #5. Data class
         #6. Taxonomic division
         #7. Sequence length
-        self._write_single_line("ID", "%s; %s; ; %s; ; %s; %i BP." \
+        self._write_single_line("ID", "%s; %s; ; %s; ; %s; %i %s." \
                                 % (accession, version, mol_type,
-                                   division, len(record)))
+                                   division, len(record), units))
         handle.write("XX\n")
         self._write_single_line("AC", accession+";")
         handle.write("XX\n")
@@ -966,13 +1005,20 @@ class EmblWriter(_InsdcWriter):
         if "comment" in record.annotations:
             self._write_comment(record)
 
-        handle.write("FH   Key             Location/Qualifiers\n")
+        handle.write(self.FEATURE_HEADER)
+        rec_length = len(record)
         for feature in record.features:
-            self._write_feature(feature) 
+            self._write_feature(feature, rec_length)
 
         self._write_sequence(record)
         handle.write("//\n")
 
+class ImgtWriter(EmblWriter):
+    HEADER_WIDTH = 5
+    QUALIFIER_INDENT = 25 # Not 21 as in EMBL
+    QUALIFIER_INDENT_STR = "FT" + " "*(QUALIFIER_INDENT-2)
+    QUALIFIER_INDENT_TMP = "FT   %s                    " # 25 if %s is empty
+    FEATURE_HEADER = "FH   Key                 Location/Qualifiers\n"
 
 if __name__ == "__main__":
     print "Quick self test"
@@ -1037,7 +1083,7 @@ if __name__ == "__main__":
         #This only checks key shared qualifiers
         #Would a white list be easier?
         #for key in ["name", "gene", "translation", "codon_table", "codon_start", "locus_tag"]:
-        for key in set(old.qualifiers.keys()).intersection(new.qualifiers.keys()):
+        for key in set(old.qualifiers).intersection(new.qualifiers):
             if key in ["db_xref", "protein_id", "product", "note"]:
                 #EMBL and GenBank files are use different references/notes/etc
                 continue
