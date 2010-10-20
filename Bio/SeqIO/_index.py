@@ -71,9 +71,9 @@ class _IndexedSeqFileDict(UserDict.DictMixin):
         self._offsets = offsets
     
     def __repr__(self):
-        return "SeqIO.index('%s', '%s', alphabet=%s, key_function=%s)" \
-               % (self._handle.name, self._proxy._format,
-                  repr(self._proxy._alphabet), self._key_function)
+        return "SeqIO.index(%r, %r, alphabet=%r, key_function=%r)" \
+               % (self._proxy._handle.name, self._proxy._format,
+                  self._proxy._alphabet, self._key_function)
 
     def __str__(self):
         if self:
