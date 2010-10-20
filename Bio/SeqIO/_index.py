@@ -87,11 +87,6 @@ class _IndexedSeqFileDict(UserDict.DictMixin):
         """How many records are there?"""
         return len(self._offsets)
 
-    def keys(self) :
-        """Return a list of all the keys (SeqRecord identifiers)."""
-        #TODO - Stick a warning in here for large lists? Or just refuse?
-        return self._offsets.keys()
-
     if hasattr(dict, "iteritems"):
         #Python 2, use iteritems but not items etc
         def values(self):
@@ -118,10 +113,25 @@ class _IndexedSeqFileDict(UserDict.DictMixin):
                                       "sequence file you cannot access all the "
                                       "records at once.")
 
+        def keys(self) :
+            """Return a list of all the keys (SeqRecord identifiers)."""
+            #TODO - Stick a warning in here for large lists? Or just refuse?
+            return self._offsets.keys()
+
+        def itervalues(self):
+            """Iterate over the SeqRecord) items."""
+            for key in self.__iter__():
+                yield self.__getitem__(key)
+
         def iteritems(self):
             """Iterate over the (key, SeqRecord) items."""
             for key in self.__iter__():
                 yield key, self.__getitem__(key)
+        
+        def iterkeys(self):
+            """Iterate over the keys."""
+            return self.__iter__()
+
     else:
         #Python 3 - define items and values as iterators
         def items(self):
@@ -133,6 +143,10 @@ class _IndexedSeqFileDict(UserDict.DictMixin):
             """Iterate over the SeqRecord items."""
             for key in self.__iter__():
                 yield self.__getitem__(key)
+
+        def keys(self):
+            """Iterate over the keys."""
+            return self.__iter__()
 
     def __iter__(self):
         """Iterate over the keys."""
