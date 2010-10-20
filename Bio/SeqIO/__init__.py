@@ -763,12 +763,7 @@ def index(filename, format, alphabet=None, key_function=None):
 
     #Map the file format to a sequence iterator:    
     import _index #Lazy import
-    try:
-        proxy = _index._FormatToRandomAccess[format]
-    except KeyError:
-        raise ValueError("Unsupported format '%s'" % format)
-    return _index._IndexedSeqFileDict(proxy(filename, format, alphabet),
-                                      key_function)
+    return _index._IndexedSeqFileDict(filename, format, alphabet, key_function)
 
 def to_alignment(sequences, alphabet=None, strict=True):
     """Returns a multiple sequence alignment (DEPRECATED).
