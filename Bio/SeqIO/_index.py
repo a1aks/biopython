@@ -215,6 +215,79 @@ class _IndexedSeqFileDict(UserDict.DictMixin):
                                   "support this.")
 
 
+class _IndexedManySeqFilesDict(_IndexedSeqFileDict):
+    """Read only dictionary interface to many sequential sequence files.
+
+    Keeps the keys in memory, reads the file to access entries as
+    SeqRecord objects using Bio.SeqIO for parsing them. This approach
+    is memory limited as internally it uses a Python dictionary where
+    the values are tuples of file-number and offset within that file.
+    """
+    def __init__(self, filenames, format, alphabet, key_function):
+        #Use key_function=None for default value
+        try:
+            proxy_class = _FormatToRandomAccess[format]
+        except KeyError:
+            raise ValueError("Unsupported format '%s'" % format)
+        
+        offsets = {}
+        random_access_proxies = []
+        #TODO - Don't hold all the file handles open at once (due to OS limits)
+        for i, filename in enumerate(filenames):
+            random_access_proxy = proxy_class(filename, format, alphabet)
+            random_access_proxies.append(random_access_proxy) 
+            if key_function:
+                offset_iter = ((key_function(k),o) for (k,o) in random_access_proxy)
+            else:
+                offset_iter = random_access_proxy
+            for key, offset in offset_iter:
+                if key in offsets:
+                    raise ValueError("Duplicate key '%s'" % key)
+                else:
+                    offsets[key] = (i, offset)
+        self._offsets = offsets
+        self._proxies = random_access_proxies
+        self._filenames = filenames
+        self._format = format
+        self._alphabet = alphabet
+        self._key_function = key_function
+    
+    def __repr__(self):
+        return "SeqIO.index(%r, %r, alphabet=%r, key_function=%r)" \
+               % (self._filenames, self._format,
+                  self._alphabet, self._key_function)
+
+    def __getitem__(self, key):
+        """x.__getitem__(y) <==> x[y]"""
+        #Pass the offset to the proxy
+        file_number, offset = self._offsets[key]
+        record = self._proxies[file_number].get(offset)
+        if self._key_function:
+            key2 = self._key_function(record.id)
+        else:
+            key2 = record.id
+        if key != key2:
+            raise ValueError("Key did not match (%s vs %s)" % (key, key2))
+        return record
+
+    def get(self, k, d=None):
+        """D.get(k[,d]) -> D[k] if k in D, else d.  d defaults to None."""
+        try:
+            return self.__getitem__(k)
+        except KeyError:
+            return d
+
+    def get_raw(self, key):
+        """Similar to the get method, but returns the record as a raw string.
+
+        If the key is not found, a KeyError exception is raised.
+
+        NOTE - This functionality is not supported for every file format.
+        """
+        #Pass the offset to the proxy
+        file_number, offset = self._offsets[key]
+        return self._proxies[file_number].get_raw(offset)
+
 ##############################################################################
 
 class SeqFileRandomAccess(object):
