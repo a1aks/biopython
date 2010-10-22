@@ -84,10 +84,6 @@ class _IndexedSeqFileDict(UserDict.DictMixin):
     def __contains__(self, key) :
         return key in self._offsets
         
-    def _get_offset(self, key) :
-        #Separate method to help ease complex subclassing like SFF
-        return self._offsets[key]
-
     def __len__(self):
         """How many records are there?"""
         return len(self._offsets)
