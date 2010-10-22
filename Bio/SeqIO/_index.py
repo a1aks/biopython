@@ -465,6 +465,7 @@ class SwissRandomAccess(SequentialSeqFileRandomAccess):
     """Random access to a SwissProt file."""
     def __iter__(self):
         handle = self._handle
+        handle.seek(0)
         marker_re = re.compile("^ID ")
         self._marker_re = marker_re #saved for the get_raw method
         while True:
@@ -521,6 +522,7 @@ class TabRandomAccess(SeqFileRandomAccess):
     """Random access to a simple tabbed file."""
     def __iter__(self):
         handle = self._handle
+        handle.seek(0)
         while True:
             offset = handle.tell()
             line = handle.readline()
