@@ -332,17 +332,20 @@ class SffTrimedRandomAccess(SffRandomAccess) :
 class SequentialSeqFileRandomAccess(SeqFileRandomAccess):
     def __init__(self, filename, format, alphabet):
         SeqFileRandomAccess.__init__(self, filename, format, alphabet)
-        try:
-            marker = {"ace" : "CO ",
-                      "fasta": ">",
-                      "phd" : "BEGIN_SEQUENCE",
-                      "pir" : ">..;",
-                      "qual": ">",
-                       }[format]
-            self._marker = marker
-            self._marker_re = re.compile("^%s" % marker)
-        except KeyError:
-            pass
+        marker = {"ace" : "CO ",
+                  "embl" : "ID ",
+                  "fasta" : ">",
+                  "genbank" : "LOCUS ",
+                  "gb": "LOCUS ",
+                  "imgt" : "ID ",
+                  "phd" : "BEGIN_SEQUENCE",
+                  "pir" : ">..;",
+                  "qual": ">",
+                  "qual": ">",
+                  "swiss" : "ID ",
+                   }[format]
+        self._marker = marker
+        self._marker_re = re.compile("^%s" % marker)
         
     def __iter__(self):
         """Returns (id,offset) tuples."""
@@ -383,8 +386,7 @@ class GenBankRandomAccess(SequentialSeqFileRandomAccess):
     def __iter__(self):
         handle = self._handle
         handle.seek(0)
-        marker_re = re.compile("^LOCUS ")
-        self._marker_re = marker_re #saved for the get_raw method
+        marker_re = self._marker_re
         while True:
             offset = handle.tell()
             line = handle.readline()
@@ -421,8 +423,7 @@ class EmblRandomAccess(SequentialSeqFileRandomAccess):
     def __iter__(self):
         handle = self._handle
         handle.seek(0)
-        marker_re = re.compile("^ID ")
-        self._marker_re = marker_re #saved for the get_raw method
+        marker_re = self._marker_re
         while True:
             offset = handle.tell()
             line = handle.readline()
@@ -466,8 +467,7 @@ class SwissRandomAccess(SequentialSeqFileRandomAccess):
     def __iter__(self):
         handle = self._handle
         handle.seek(0)
-        marker_re = re.compile("^ID ")
-        self._marker_re = marker_re #saved for the get_raw method
+        marker_re = self._marker_re
         while True:
             offset = handle.tell()
             line = handle.readline()
@@ -482,10 +482,14 @@ class SwissRandomAccess(SequentialSeqFileRandomAccess):
 
 class IntelliGeneticsRandomAccess(SeqFileRandomAccess):
     """Random access to a IntelliGenetics file."""
+    def __init__(self, filename, format, alphabet):
+        SeqFileRandomAccess.__init__(self, filename, format, alphabet)
+        self._marker_re = re.compile("^;")
+
     def __iter__(self):
         handle = self._handle
         handle.seek(0)
-        marker_re = re.compile("^;")
+        marker_re = self._marker_re
         while True:
             offset = handle.tell()
             line = handle.readline()
@@ -504,7 +508,7 @@ class IntelliGeneticsRandomAccess(SeqFileRandomAccess):
     def get_raw(self, offset):
         handle = self._handle
         handle.seek(offset)
-        marker_re = re.compile("^;")
+        marker_re = self._marker_re
         lines = []
         while True:
             line = handle.readline()
