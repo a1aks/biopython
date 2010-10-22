@@ -222,8 +222,12 @@ class _IndexedManySeqFilesDict(_IndexedSeqFileDict):
     SeqRecord objects using Bio.SeqIO for parsing them. This approach
     is memory limited as internally it uses a Python dictionary where
     the values are tuples of file-number and offset within that file.
+    
+    There are OS limits on the number of files that can be open at once,
+    so a pool are kept. If a record is required from a closed file, then
+    one of the open handles is closed first.
     """
-    def __init__(self, filenames, format, alphabet, key_function):
+    def __init__(self, filenames, format, alphabet, key_function, max_open=10):
         #Use key_function=None for default value
         try:
             proxy_class = _FormatToRandomAccess[format]
@@ -231,11 +235,10 @@ class _IndexedManySeqFilesDict(_IndexedSeqFileDict):
             raise ValueError("Unsupported format '%s'" % format)
         
         offsets = {}
-        random_access_proxies = []
-        #TODO - Don't hold all the file handles open at once (due to OS limits)
+        random_access_proxies = {}
+        filenames = list(filenames) #In case it was a generator
         for i, filename in enumerate(filenames):
             random_access_proxy = proxy_class(filename, format, alphabet)
-            random_access_proxies.append(random_access_proxy) 
             if key_function:
                 offset_iter = ((key_function(k),o) for (k,o) in random_access_proxy)
             else:
@@ -245,8 +248,13 @@ class _IndexedManySeqFilesDict(_IndexedSeqFileDict):
                     raise ValueError("Duplicate key '%s'" % key)
                 else:
                     offsets[key] = (i, offset)
+            if len(random_access_proxies) < max_open:
+                random_access_proxies[i] = random_access_proxy
+            else:
+                random_access_proxy._handle.close()
         self._offsets = offsets
         self._proxies = random_access_proxies
+        self._max_open = max_open
         self._filenames = filenames
         self._format = format
         self._alphabet = alphabet
@@ -261,7 +269,19 @@ class _IndexedManySeqFilesDict(_IndexedSeqFileDict):
         """x.__getitem__(y) <==> x[y]"""
         #Pass the offset to the proxy
         file_number, offset = self._offsets[key]
-        record = self._proxies[file_number].get(offset)
+        proxies = self._proxies
+        if file_number in proxies:
+            record = proxies[file_number].get(offset)
+        else:
+            if len(proxies) >= self._max_open:
+                #Close an old handle...
+                proxies.popitem()[1]._handle.close()
+            #Open a new handle...
+            proxy = _FormatToRandomAccess[self._format]( \
+                        self._filenames[file_number],
+                        self._format, self._alphabet)
+            record = proxy.get(offset)
+            proxies[file_number] = proxy
         if self._key_function:
             key2 = self._key_function(record.id)
         else:
@@ -286,7 +306,20 @@ class _IndexedManySeqFilesDict(_IndexedSeqFileDict):
         """
         #Pass the offset to the proxy
         file_number, offset = self._offsets[key]
-        return self._proxies[file_number].get_raw(offset)
+        proxies = self._proxies
+        if file_number in proxies:
+            record = proxies[file_number].get_raw(offset)
+        else:
+            #This code is duplicated from __getitem__ to avoid a function call
+            if len(proxies) >= self._max_open:
+                #Close an old handle...
+                proxies.popitem()[1]._handle.close()
+            #Open a new handle...
+            proxy = _FormatToRandomAccess[self._format]( \
+                        self._filenames[file_number],
+                        self._format, self._alphabet)
+            proxies[file_number] = proxy
+            return proxy.get_raw(offset)
 
 ##############################################################################
 
