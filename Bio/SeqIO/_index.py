@@ -23,8 +23,14 @@ sequencing. If this is an issue later on, storing the keys and offsets in a
 temp lookup file might be one idea (e.g. using SQLite or an OBDA style index).
 """
 
+import os
 import UserDict
 import re
+import itertools
+from sqlite3 import dbapi2 as _sqlite
+from sqlite3 import IntegrityError as _IntegrityError
+from sqlite3 import OperationalError as _OperationalError
+
 from Bio import SeqIO
 from Bio import Alphabet
 
@@ -215,44 +221,95 @@ class _IndexedSeqFileDict(UserDict.DictMixin):
                                   "support this.")
 
 
-class _IndexedManySeqFilesDict(_IndexedSeqFileDict):
+class _SQLiteManySeqFilesDict(_IndexedSeqFileDict):
     """Read only dictionary interface to many sequential sequence files.
 
-    Keeps the keys in memory, reads the file to access entries as
-    SeqRecord objects using Bio.SeqIO for parsing them. This approach
-    is memory limited as internally it uses a Python dictionary where
-    the values are tuples of file-number and offset within that file.
+    Keeps the keys, file-numbers and offsets in an SQLite database. To access
+    a record by key, reads from the offset in the approapriate file using
+    Bio.SeqIO for parsing.
     
     There are OS limits on the number of files that can be open at once,
     so a pool are kept. If a record is required from a closed file, then
     one of the open handles is closed first.
     """
-    def __init__(self, filenames, format, alphabet, key_function, max_open=10):
+    def __init__(self, index_filename, filenames, format, alphabet,
+                 key_function, max_open=10):
         #Use key_function=None for default value
         try:
             proxy_class = _FormatToRandomAccess[format]
         except KeyError:
             raise ValueError("Unsupported format '%s'" % format)
-        
-        offsets = {}
+
         random_access_proxies = {}
         filenames = list(filenames) #In case it was a generator
-        for i, filename in enumerate(filenames):
-            random_access_proxy = proxy_class(filename, format, alphabet)
-            if key_function:
-                offset_iter = ((key_function(k),o) for (k,o) in random_access_proxy)
-            else:
-                offset_iter = random_access_proxy
-            for key, offset in offset_iter:
-                if key in offsets:
-                    raise ValueError("Duplicate key '%s'" % key)
+        if os.path.isfile(index_filename):
+            #Reuse the index.
+            con = _sqlite.connect(index_filename)
+            self._con = con
+            #Check the count...
+            try:
+                count, = con.execute("SELECT value FROM meta_data WHERE key=?;",
+                                     ("count",)).fetchone()
+                self._length = int(count)
+                if self._length == -1:
+                    raise ValueError("Unfinished/partial database")
+                count, = con.execute("SELECT COUNT(key) FROM offset_data;").fetchone()
+                if self._length <> int(count):
+                    raise ValueError("Corrupt database? %i entries not %i" \
+                                     % (int(count), self._length))
+            except _OperationalError, err:
+                raise ValueError("Not a Biopython index database? %s" % err)
+            #TODO - Check the filenames...
+            #TODO - Check the format...
+        else:
+            #Create the index
+            con = _sqlite.connect(index_filename)
+            self._con = con
+            #print "Creating index"
+            # Sqlite PRAGMA settings for speed
+            con.execute("PRAGMA synchronous='OFF'")
+            con.execute("PRAGMA locking_mode=EXCLUSIVE")
+            #Don't index the key column until the end (faster)
+            #con.execute("CREATE TABLE offset_data (key TEXT PRIMARY KEY, "
+            # "offset INTEGER);")
+            con.execute("CREATE TABLE meta_data (key TEXT, value TEXT);")
+            con.execute("INSERT INTO meta_data (key, value) VALUES (?,?);",
+                        ("count", -1))
+            #TODO - Record the format and alphabet
+            #TODO - Record the filenames
+            con.execute("CREATE TABLE offset_data (key TEXT, file_number INTEGER, offset INTEGER);")
+            count = 0
+            for i, filename in enumerate(filenames):
+                random_access_proxy = proxy_class(filename, format, alphabet)
+                if key_function:
+                    offset_iter = ((key_function(k),i,o) for (k,o) in random_access_proxy)
                 else:
-                    offsets[key] = (i, offset)
-            if len(random_access_proxies) < max_open:
-                random_access_proxies[i] = random_access_proxy
-            else:
-                random_access_proxy._handle.close()
-        self._offsets = offsets
+                    offset_iter = ((k,i,o) for (k,o) in random_access_proxy)
+                while True:
+                    batch = list(itertools.islice(offset_iter, 100))
+                    if not batch: break
+                    #print "Inserting batch of %i offsets, %s ... %s" \
+                    # % (len(batch), batch[0][0], batch[-1][0])
+                    con.executemany("INSERT INTO offset_data (key,file_number,offset) VALUES (?,?,?);",
+                                    batch)
+                    con.commit()
+                    count += len(batch)
+                if len(random_access_proxies) < max_open:
+                    random_access_proxies[i] = random_access_proxy
+                else:
+                    random_access_proxy._handle.close()
+            self._length = count
+            #print "About to index %i entries" % count
+            try:
+                con.execute("CREATE UNIQUE INDEX IF NOT EXISTS "
+                            "key_index ON offset_data(key);")
+            except _IntegrityError, err:
+                raise ValueError("Duplicate key? %s" % err)
+            con.execute("PRAGMA locking_mode=NORMAL")
+            con.execute("UPDATE meta_data SET value = ? WHERE key = ?;",
+                        (count, "count"))
+            con.commit()
+            #print "Index created"
         self._proxies = random_access_proxies
         self._max_open = max_open
         self._filenames = filenames
@@ -261,14 +318,39 @@ class _IndexedManySeqFilesDict(_IndexedSeqFileDict):
         self._key_function = key_function
     
     def __repr__(self):
-        return "SeqIO.index(%r, %r, alphabet=%r, key_function=%r)" \
-               % (self._filenames, self._format,
+        return "SeqIO.index_many(%r, filename=%r, format=%r, alphabet=%r, key_function=%r)" \
+               % (self._index_filenane, self._filenames, self._format,
                   self._alphabet, self._key_function)
 
+    def __contains__(self, key):
+        return bool(self._con.execute("SELECT key FROM offset_data WHERE key=?;",
+                                      (key,)).fetchone())
+
+    def __len__(self):
+        """How many records are there?"""
+        return self._length
+        #return self._con.execute("SELECT COUNT(key) FROM offset_data;").fetchone()[0]
+
+    def __iter__(self):
+        """Iterate over the keys."""
+        for row in self._con.execute("SELECT key FROM offset_data;"):
+            yield str(row[0])
+
+    if hasattr(dict, "iteritems"):
+        #Python 2, use iteritems but not items etc
+        #Just need to override this...
+        def keys(self) :
+            """Return a list of all the keys (SeqRecord identifiers)."""
+            return [str(row[0]) for row in \
+                    self._con.execute("SELECT key FROM offset_data;").fetchall()]
+            
     def __getitem__(self, key):
         """x.__getitem__(y) <==> x[y]"""
         #Pass the offset to the proxy
-        file_number, offset = self._offsets[key]
+        row = self._con.execute("SELECT file_number, offset FROM offset_data WHERE key=?;",
+                                (key,)).fetchone()
+        if not row: raise KeyError
+        file_number, offset = row
         proxies = self._proxies
         if file_number in proxies:
             record = proxies[file_number].get(offset)
@@ -305,7 +387,10 @@ class _IndexedManySeqFilesDict(_IndexedSeqFileDict):
         NOTE - This functionality is not supported for every file format.
         """
         #Pass the offset to the proxy
-        file_number, offset = self._offsets[key]
+        row = self._con.execute("SELECT file_number, offset FROM offset_data WHERE key=?;",
+                                (key,)).fetchone()
+        if not row: raise KeyError
+        file_number, offset = row
         proxies = self._proxies
         if file_number in proxies:
             record = proxies[file_number].get_raw(offset)

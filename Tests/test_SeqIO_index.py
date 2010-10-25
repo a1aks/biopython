@@ -41,11 +41,11 @@ class IndexDictTests(unittest.TestCase):
         rec_dict = SeqIO.index(filename, format, alphabet, add_prefix)
         self.check_dict_methods(rec_dict, key_list, id_list)
         #Without key_function
-        rec_dict = SeqIO.index_many([filename], format, alphabet)
+        rec_dict = SeqIO.index_many(":memory:", [filename], format, alphabet)
         self.check_dict_methods(rec_dict, id_list, id_list)
         #Check with key_function
         key_list = [add_prefix(id) for id in id_list]
-        rec_dict = SeqIO.index_many([filename], format, alphabet, add_prefix)
+        rec_dict = SeqIO.index_many(":memory:", [filename], format, alphabet, add_prefix)
         self.check_dict_methods(rec_dict, key_list, id_list)
         #Done
     

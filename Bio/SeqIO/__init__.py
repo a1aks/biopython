@@ -768,10 +768,14 @@ def index(filename, format, alphabet=None, key_function=None):
     import _index #Lazy import
     return _index._IndexedSeqFileDict(filename, format, alphabet, key_function)
 
-def index_many(filenames, format, alphabet=None, key_function=None):
+def index_many(index_filename, filenames, format, alphabet=None, key_function=None):
     """Index several sequence files and return a dictionary like object.
 
-     - filenames - list of strings specifying files to be indexed
+    The index is stored in an SQLite database rather than in memory (as in the
+    Bio.SeqIO.index(...) function).
+    
+     - index_filename - Where to store the SQLite index
+     - filenames - list of strings specifying file(s) to be indexed
      - format   - lower case string describing the file format
      - alphabet - optional Alphabet object, useful when the sequence type
                   cannot be automatically inferred from the file itself
@@ -791,7 +795,8 @@ def index_many(filenames, format, alphabet=None, key_function=None):
     ...     i = parts.index("gi")
     ...     assert i != -1
     ...     return parts[i+1]
-    >>> records = SeqIO.index_many(files, "fasta", generic_protein, get_gi)
+    >>> idx_name = ":memory:" #use an in memory SQLite DB for this test
+    >>> records = SeqIO.index_many(idx_name, files, "fasta", generic_protein, get_gi)
     >>> len(records)
     95
     >>> records["7525076"].description
@@ -804,6 +809,8 @@ def index_many(filenames, format, alphabet=None, key_function=None):
     See also: Bio.SeqIO.index() and Bio.SeqIO.to_dict()
     """
     #Try and give helpful error messages:
+    if not isinstance(index_filename, basestring):
+        raise TypeError("Need a string for the index filename")
     if not isinstance(filenames, list):
         raise TypeError("Need a list of filenames (as strings)")
     if not isinstance(format, basestring):
@@ -818,8 +825,8 @@ def index_many(filenames, format, alphabet=None, key_function=None):
 
     #Map the file format to a sequence iterator:    
     import _index #Lazy import
-    return _index._IndexedManySeqFilesDict(filenames, format, alphabet,
-                                           key_function)
+    return _index._SQLiteManySeqFilesDict(index_filename, filenames, format,
+                                          alphabet, key_function)
 
 
 def to_alignment(sequences, alphabet=None, strict=True):
