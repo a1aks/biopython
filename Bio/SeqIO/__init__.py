@@ -642,7 +642,8 @@ def to_dict(sequences, key_function=None):
 
     This approach is not suitable for very large sets of sequences, as all
     the SeqRecord objects are held in memory. Instead, consider using the
-    Bio.SeqIO.index() function (if it supports your particular file format).
+    Bio.SeqIO.index() or index_many() functions (if they support your
+    particular file format).
     """    
     if key_function is None:
         key_function = lambda rec : rec.id
@@ -658,8 +659,7 @@ def to_dict(sequences, key_function=None):
 def index(filename, format, alphabet=None, key_function=None):
     """Indexes a sequence file and returns a dictionary like object.
 
-     - filename - string giving name of file to be indexed, or multiple
-                  filenames (e.g. list of filenames)
+     - filename - string giving name of file to be indexed
      - format   - lower case string describing the file format
      - alphabet - optional Alphabet object, useful when the sequence type
                   cannot be automatically inferred from the file itself
@@ -749,31 +749,11 @@ def index(filename, format, alphabet=None, key_function=None):
     to be completely parsed while building the index. Right now this is
     usually avoided.
     
-    In recent versions of Biopython you can also index multiple files at once:
-
-    >>> from Bio.Alphabet import generic_protein
-    >>> from Bio import SeqIO
-    >>> files = ["GenBank/NC_000932.faa", "GenBank/NC_005816.faa"]
-    >>> def get_gi(name):
-    ...     parts = name.split("|")
-    ...     i = parts.index("gi")
-    ...     assert i != -1
-    ...     return parts[i+1]
-    >>> records = SeqIO.index(files, "fasta", generic_protein, get_gi)
-    >>> len(records)
-    95
-    >>> records["7525076"].description
-    'gi|7525076|ref|NP_051101.1| Ycf2 [Arabidopsis thaliana]'
-    >>> records["45478717"].description
-    'gi|45478717|ref|NP_995572.1| pesticin [Yersinia pestis biovar Microtus str. 91001]'
-
-    In this example the two files contain 85 and 10 records respectively.    
+    See also: Bio.SeqIO.index_many() and Bio.SeqIO.to_dict()
     """
     #Try and give helpful error messages:
-    if isinstance(filename, basestring):
-        multi = False
-    else:
-        multi = filename #list/tuple
+    if not isinstance(filename, basestring):
+        raise TypeError("Need a filename (not a handle)")
     if not isinstance(format, basestring):
         raise TypeError("Need a string for the file format (lower case)")
     if not format:
@@ -786,10 +766,61 @@ def index(filename, format, alphabet=None, key_function=None):
 
     #Map the file format to a sequence iterator:    
     import _index #Lazy import
-    if multi:
-        return _index._IndexedManySeqFilesDict(multi, format, alphabet, key_function)
-    else:
-        return _index._IndexedSeqFileDict(filename, format, alphabet, key_function)
+    return _index._IndexedSeqFileDict(filename, format, alphabet, key_function)
+
+def index_many(filenames, format, alphabet=None, key_function=None):
+    """Index several sequence files and return a dictionary like object.
+
+     - filenames - list of strings specifying files to be indexed
+     - format   - lower case string describing the file format
+     - alphabet - optional Alphabet object, useful when the sequence type
+                  cannot be automatically inferred from the file itself
+                  (e.g. format="fasta" or "tab")
+     - key_function - Optional callback function which when given a
+                  SeqRecord identifier string should return a unique
+                  key for the dictionary.
+    
+    This indexing function will return a dictionary like object, giving the
+    SeqRecord objects as values:
+
+    >>> from Bio.Alphabet import generic_protein
+    >>> from Bio import SeqIO
+    >>> files = ["GenBank/NC_000932.faa", "GenBank/NC_005816.faa"]
+    >>> def get_gi(name):
+    ...     parts = name.split("|")
+    ...     i = parts.index("gi")
+    ...     assert i != -1
+    ...     return parts[i+1]
+    >>> records = SeqIO.index_many(files, "fasta", generic_protein, get_gi)
+    >>> len(records)
+    95
+    >>> records["7525076"].description
+    'gi|7525076|ref|NP_051101.1| Ycf2 [Arabidopsis thaliana]'
+    >>> records["45478717"].description
+    'gi|45478717|ref|NP_995572.1| pesticin [Yersinia pestis biovar Microtus str. 91001]'
+
+    In this example the two files contain 85 and 10 records respectively.
+    
+    See also: Bio.SeqIO.index() and Bio.SeqIO.to_dict()
+    """
+    #Try and give helpful error messages:
+    if not isinstance(filenames, list):
+        raise TypeError("Need a list of filenames (as strings)")
+    if not isinstance(format, basestring):
+        raise TypeError("Need a string for the file format (lower case)")
+    if not format:
+        raise ValueError("Format required (lower case string)")
+    if format != format.lower():
+        raise ValueError("Format string '%s' should be lower case" % format)
+    if alphabet is not None and not (isinstance(alphabet, Alphabet) or \
+                                     isinstance(alphabet, AlphabetEncoder)):
+        raise ValueError("Invalid alphabet, %s" % repr(alphabet))
+
+    #Map the file format to a sequence iterator:    
+    import _index #Lazy import
+    return _index._IndexedManySeqFilesDict(filenames, format, alphabet,
+                                           key_function)
+
 
 def to_alignment(sequences, alphabet=None, strict=True):
     """Returns a multiple sequence alignment (DEPRECATED).
