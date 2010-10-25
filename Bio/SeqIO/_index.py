@@ -257,11 +257,19 @@ class _SQLiteManySeqFilesDict(_IndexedSeqFileDict):
                 if self._length <> int(count):
                     raise ValueError("Corrupt database? %i entries not %i" \
                                      % (int(count), self._length))
-                self.format, = con.execute("SELECT value FROM meta_data WHERE key=?;",
+                self._format, = con.execute("SELECT value FROM meta_data WHERE key=?;",
                                            ("format",)).fetchone()
-                if format and format != self.format:
+                if format and format != self._format:
                     raise ValueError("Index file says format %s, not %s" \
-                                     % (self.format, format))
+                                     % (self._format, format))
+                self._filenames = [row[0] for row in \
+                                  con.execute("SELECT name FROM file_data "
+                                              "ORDER BY file_number;").fetchall()]
+                if filenames and len(filenames) != len(self._filenames):
+                    raise ValueError("Index file says %i files, not %i" \
+                                     % (len(self.filenames) != len(filenames)))
+                if filenames and filenames != self._filenames:
+                    raise ValueError("Index file has different filenames")
             except _OperationalError, err:
                 raise ValueError("Not a Biopython index database? %s" % err)
             #TODO - Check the filenames...
@@ -283,10 +291,13 @@ class _SQLiteManySeqFilesDict(_IndexedSeqFileDict):
             con.execute("INSERT INTO meta_data (key, value) VALUES (?,?);",
                         ("format", format))
             #TODO - Record the alphabet?
-            #TODO - Record the filenames
+            #TODO - Record the file size and modified date?
+            con.execute("CREATE TABLE file_data (file_number INTEGER, name TEXT);")
             con.execute("CREATE TABLE offset_data (key TEXT, file_number INTEGER, offset INTEGER);")
             count = 0
             for i, filename in enumerate(filenames):
+                con.execute("INSERT INTO file_data (file_number, name) VALUES (?,?);",
+                            (i, filename))
                 random_access_proxy = proxy_class(filename, format, alphabet)
                 if key_function:
                     offset_iter = ((key_function(k),i,o) for (k,o) in random_access_proxy)
