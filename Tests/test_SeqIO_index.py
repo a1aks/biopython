@@ -3,7 +3,7 @@
 # license.  Please see the LICENSE file that should have been included
 # as part of this package.
 
-"""Additional unit tests for Bio.SeqIO.index(...) function."""
+"""Unit tests for Bio.SeqIO.index(...) and index_many() functions."""
 import sys
 if sys.version_info[0] >= 3:
     from Bio import MissingExternalDependencyError
@@ -39,6 +39,13 @@ class IndexDictTests(unittest.TestCase):
         #Check with key_function
         key_list = [add_prefix(id) for id in id_list]
         rec_dict = SeqIO.index(filename, format, alphabet, add_prefix)
+        self.check_dict_methods(rec_dict, key_list, id_list)
+        #Without key_function
+        rec_dict = SeqIO.index_many([filename], format, alphabet)
+        self.check_dict_methods(rec_dict, id_list, id_list)
+        #Check with key_function
+        key_list = [add_prefix(id) for id in id_list]
+        rec_dict = SeqIO.index_many([filename], format, alphabet, add_prefix)
         self.check_dict_methods(rec_dict, key_list, id_list)
         #Done
     
