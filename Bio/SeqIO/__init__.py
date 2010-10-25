@@ -768,7 +768,8 @@ def index(filename, format, alphabet=None, key_function=None):
     import _index #Lazy import
     return _index._IndexedSeqFileDict(filename, format, alphabet, key_function)
 
-def index_many(index_filename, filenames, format, alphabet=None, key_function=None):
+def index_many(index_filename, filenames=None, format=None, alphabet=None,
+               key_function=None):
     """Index several sequence files and return a dictionary like object.
 
     The index is stored in an SQLite database rather than in memory (as in the
@@ -776,7 +777,9 @@ def index_many(index_filename, filenames, format, alphabet=None, key_function=No
     
      - index_filename - Where to store the SQLite index
      - filenames - list of strings specifying file(s) to be indexed
+                  (optional if reloading an existing index, but must match)
      - format   - lower case string describing the file format
+                  (optional if reloading an existing index, but must match)
      - alphabet - optional Alphabet object, useful when the sequence type
                   cannot be automatically inferred from the file itself
                   (e.g. format="fasta" or "tab")
@@ -811,13 +814,11 @@ def index_many(index_filename, filenames, format, alphabet=None, key_function=No
     #Try and give helpful error messages:
     if not isinstance(index_filename, basestring):
         raise TypeError("Need a string for the index filename")
-    if not isinstance(filenames, list):
+    if filenames is not None and not isinstance(filenames, list):
         raise TypeError("Need a list of filenames (as strings)")
-    if not isinstance(format, basestring):
+    if format is not None and not isinstance(format, basestring):
         raise TypeError("Need a string for the file format (lower case)")
-    if not format:
-        raise ValueError("Format required (lower case string)")
-    if format != format.lower():
+    if format and format != format.lower():
         raise ValueError("Format string '%s' should be lower case" % format)
     if alphabet is not None and not (isinstance(alphabet, Alphabet) or \
                                      isinstance(alphabet, AlphabetEncoder)):

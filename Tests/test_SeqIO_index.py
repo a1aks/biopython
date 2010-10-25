@@ -53,6 +53,12 @@ class IndexDictTests(unittest.TestCase):
         #Now reload it...
         rec_dict = SeqIO.index_many(index_tmp, [filename], format, alphabet)
         self.check_dict_methods(rec_dict, id_list, id_list)
+        #Now reload without passing filenames and format
+        rec_dict = SeqIO.index_many(index_tmp, alphabet=alphabet)
+        self.check_dict_methods(rec_dict, id_list, id_list)
+        #check error conditions
+        self.assertRaises(ValueError, SeqIO.index_many, index_tmp, format="dummy")
+        self.assertRaises(ValueError, SeqIO.index_many, index_tmp, filenames=["dummy"])
         os.remove(index_tmp)
 
         #Check with key_function
@@ -64,6 +70,9 @@ class IndexDictTests(unittest.TestCase):
         self.check_dict_methods(rec_dict, key_list, id_list)
         #Now reload it...
         rec_dict = SeqIO.index_many(index_tmp, [filename], format, alphabet, add_prefix)
+        self.check_dict_methods(rec_dict, key_list, id_list)
+        #Now reload without passing filenames and format
+        rec_dict = SeqIO.index_many(index_tmp, alphabet=alphabet, key_function=add_prefix)
         self.check_dict_methods(rec_dict, key_list, id_list)
         os.remove(index_tmp)
         #Done

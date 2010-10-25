@@ -234,14 +234,9 @@ class _SQLiteManySeqFilesDict(_IndexedSeqFileDict):
     """
     def __init__(self, index_filename, filenames, format, alphabet,
                  key_function, max_open=10):
-        #Use key_function=None for default value
-        try:
-            proxy_class = _FormatToRandomAccess[format]
-        except KeyError:
-            raise ValueError("Unsupported format '%s'" % format)
-
         random_access_proxies = {}
-        filenames = list(filenames) #In case it was a generator
+        if filenames is not None:
+            filenames = list(filenames) #In case it was a generator
         if os.path.isfile(index_filename):
             #Reuse the index.
             con = _sqlite.connect(index_filename)
@@ -272,9 +267,20 @@ class _SQLiteManySeqFilesDict(_IndexedSeqFileDict):
                     raise ValueError("Index file has different filenames")
             except _OperationalError, err:
                 raise ValueError("Not a Biopython index database? %s" % err)
-            #TODO - Check the filenames...
-            #TODO - Check the format...
+            #Now we have the format (from the DB if not given to us),
+            try:
+                proxy_class = _FormatToRandomAccess[self._format]
+            except KeyError:
+                raise ValueError("Unsupported format '%s'" % self._format)
         else:
+            self._filenames = filenames
+            self._format = format
+            if not format or not filenames:
+                raise ValueError("Filenames to index and format required")
+            try:
+                proxy_class = _FormatToRandomAccess[format]
+            except KeyError:
+                raise ValueError("Unsupported format '%s'" % format)
             #Create the index
             con = _sqlite.connect(index_filename)
             self._con = con
@@ -330,8 +336,6 @@ class _SQLiteManySeqFilesDict(_IndexedSeqFileDict):
             #print "Index created"
         self._proxies = random_access_proxies
         self._max_open = max_open
-        self._filenames = filenames
-        self._format = format
         self._alphabet = alphabet
         self._key_function = key_function
     
