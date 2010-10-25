@@ -257,6 +257,11 @@ class _SQLiteManySeqFilesDict(_IndexedSeqFileDict):
                 if self._length <> int(count):
                     raise ValueError("Corrupt database? %i entries not %i" \
                                      % (int(count), self._length))
+                self.format, = con.execute("SELECT value FROM meta_data WHERE key=?;",
+                                           ("format",)).fetchone()
+                if format and format != self.format:
+                    raise ValueError("Index file says format %s, not %s" \
+                                     % (self.format, format))
             except _OperationalError, err:
                 raise ValueError("Not a Biopython index database? %s" % err)
             #TODO - Check the filenames...
@@ -275,7 +280,9 @@ class _SQLiteManySeqFilesDict(_IndexedSeqFileDict):
             con.execute("CREATE TABLE meta_data (key TEXT, value TEXT);")
             con.execute("INSERT INTO meta_data (key, value) VALUES (?,?);",
                         ("count", -1))
-            #TODO - Record the format and alphabet
+            con.execute("INSERT INTO meta_data (key, value) VALUES (?,?);",
+                        ("format", format))
+            #TODO - Record the alphabet?
             #TODO - Record the filenames
             con.execute("CREATE TABLE offset_data (key TEXT, file_number INTEGER, offset INTEGER);")
             count = 0
