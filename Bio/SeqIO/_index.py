@@ -235,6 +235,10 @@ class _SQLiteManySeqFilesDict(_IndexedSeqFileDict):
     def __init__(self, index_filename, filenames, format, alphabet,
                  key_function, max_open=10):
         random_access_proxies = {}
+        #TODO? - Don't keep filename list in memory (just in DB)?
+        #Should save a chunk of memory if dealing with 1000s of files.
+        #Furthermore could compare a generator to the DB on reloading
+        #(no need to turn it into a list)
         if filenames is not None:
             filenames = list(filenames) #In case it was a generator
         if os.path.isfile(index_filename):
