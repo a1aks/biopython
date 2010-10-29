@@ -815,7 +815,8 @@ class FastqRandomAccess(SeqFileRandomAccess):
     def __iter__(self):
         handle = self._handle
         handle.seek(0)
-        pos = handle.tell()
+        id = None
+        start_offset = handle.tell()
         line = handle.readline()
         if not line:
             #Empty file!
@@ -825,7 +826,7 @@ class FastqRandomAccess(SeqFileRandomAccess):
         while line:
             #assert line[0]=="@"
             #This record seems OK (so far)
-            yield line[1:].rstrip().split(None, 1)[0], pos, 0
+            id = line[1:].rstrip().split(None, 1)[0]
             #Find the seq line(s)
             seq_len = 0
             while line:
@@ -840,7 +841,7 @@ class FastqRandomAccess(SeqFileRandomAccess):
             while line:
                 if seq_len == qual_len:
                     #Should be end of record...
-                    pos = handle.tell()
+                    end_offset = handle.tell()
                     line = handle.readline()
                     if line and line[0] != "@":
                         ValueError("Problem with line %s" % repr(line))
@@ -850,6 +851,8 @@ class FastqRandomAccess(SeqFileRandomAccess):
                     qual_len += len(line.strip())
             if seq_len != qual_len:
                 raise ValueError("Problem with quality section")
+            yield id, start_offset, end_offset - start_offset
+            start_offset = end_offset
         #print "EOF"
 
     def get_raw(self, offset):
