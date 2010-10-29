@@ -37,9 +37,10 @@ from Bio import Alphabet
 class _IndexedSeqFileDict(UserDict.DictMixin):
     """Read only dictionary interface to a sequential sequence file.
 
-    Keeps the keys in memory, reads the file to access entries as
-    SeqRecord objects using Bio.SeqIO for parsing them. This approach
-    is memory limited, but will work even with millions of sequences.
+    Keeps the keys and associated file offsets in memory, reads the file to
+    access entries as SeqRecord objects using Bio.SeqIO for parsing them.
+    This approach is memory limited, but will work even with millions of
+    sequences.
 
     Note - as with the Bio.SeqIO.to_dict() function, duplicate keys
     (record identifiers by default) are not allowed. If this happens,
@@ -70,6 +71,9 @@ class _IndexedSeqFileDict(UserDict.DictMixin):
             offset_iter = random_access_proxy
         offsets = {}
         for key, offset, length in offset_iter:
+            #Note - we don't store the length because I want to minimise the
+            #memory requirements. With the SQLite backend the length is kept
+            #and is used to speed up the get_raw method (by about 3 times).
             if key in offsets:
                 raise ValueError("Duplicate key '%s'" % key)
             else:
