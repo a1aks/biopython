@@ -446,7 +446,7 @@ class _SQLiteManySeqFilesDict(_IndexedSeqFileDict):
                 h.seek(offset)
                 return h.read(length)
             else:
-                proxy.get_raw(offset)
+                return proxy.get_raw(offset)
 
 ##############################################################################
 
