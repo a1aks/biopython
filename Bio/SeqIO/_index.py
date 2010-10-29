@@ -596,7 +596,7 @@ class SequentialSeqFileRandomAccess(SeqFileRandomAccess):
                     yield id, start_offset, end_offset - start_offset
                     start_offset = end_offset
                     break
-        assert not line
+        assert not line, repr(line)
 
     def get_raw(self, offset):
         """Similar to the get method, but returns the record as a raw string."""
@@ -623,36 +623,35 @@ class GenBankRandomAccess(SequentialSeqFileRandomAccess):
         handle = self._handle
         handle.seek(0)
         marker_re = self._marker_re
+        #Skip and header before first record
         while True:
-            offset = handle.tell()
+            start_offset = handle.tell()
             line = handle.readline()
-            if not line : break #End of file
-            if marker_re.match(line):
-                #We cannot assume the record.id is the first word after LOCUS,
-                #normally the first entry on the VERSION or ACCESSION line is used.
-                key = None
-                done = False
-                while not done:
-                    line = handle.readline()
-                    if line.startswith("ACCESSION "):
-                        key = line.rstrip().split()[1]
-                    elif line.startswith("VERSION "):
-                        version_id = line.rstrip().split()[1]
-                        if version_id.count(".")==1 and version_id.split(".")[1].isdigit():
-                            #This should mimic the GenBank parser...
-                            key = version_id
-                            done = True
-                            break
-                    elif line.startswith("FEATURES ") \
-                    or line.startswith("ORIGIN ") \
-                    or line.startswith("//") \
-                    or marker_re.match(line) \
-                    or not line:
-                        done = True
-                        break
-                if not key:
-                    raise ValueError("Did not find ACCESSION/VERSION lines")
-                yield key, offset, 0
+            if not line or marker_re.match(line):
+                break
+        #Should now be at the start of a record, or end of the file
+        while marker_re.match(line):
+            #We cannot assume the record.id is the first word after LOCUS,
+            #normally the first entry on the VERSION or ACCESSION line is used.
+            key = None
+            while True:
+                end_offset = handle.tell()
+                line = handle.readline()
+                if not line or marker_re.match(line):
+                    if not key:
+                        raise ValueError("Did not find ACCESSION/VERSION lines")
+                    yield key, start_offset, end_offset - start_offset
+                    start_offset = end_offset
+                    break
+                elif line.startswith("ACCESSION "):
+                    key = line.rstrip().split()[1]
+                elif line.startswith("VERSION "):
+                    version_id = line.rstrip().split()[1]
+                    if version_id.count(".")==1 and version_id.split(".")[1].isdigit():
+                        #This should mimic the GenBank parser...
+                        key = version_id
+        assert not line, repr(line)
+
 
 class EmblRandomAccess(SequentialSeqFileRandomAccess):
     """Indexed dictionary like access to an EMBL file."""
