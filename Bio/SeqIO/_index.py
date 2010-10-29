@@ -578,7 +578,7 @@ class SequentialSeqFileRandomAccess(SeqFileRandomAccess):
         marker_re = self._marker_re
         handle = self._handle
         handle.seek(0)
-        #Skip and header before first record
+        #Skip any header before first record
         while True:
             start_offset = handle.tell()
             line = handle.readline()
@@ -623,7 +623,7 @@ class GenBankRandomAccess(SequentialSeqFileRandomAccess):
         handle = self._handle
         handle.seek(0)
         marker_re = self._marker_re
-        #Skip and header before first record
+        #Skip any header before first record
         while True:
             start_offset = handle.tell()
             line = handle.readline()
