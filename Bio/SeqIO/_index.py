@@ -687,8 +687,6 @@ class EmblRandomAccess(SequentialSeqFileRandomAccess):
                 end_offset = handle.tell()
                 line = handle.readline()
                 if marker_re.match(line) or not line:
-                    if not key:
-                        raise ValueError("Did not find ACCESSION/VERSION lines")
                     yield key, start_offset, end_offset - start_offset
                     start_offset = end_offset
                     break
