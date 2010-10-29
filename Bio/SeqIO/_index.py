@@ -582,7 +582,7 @@ class SequentialSeqFileRandomAccess(SeqFileRandomAccess):
         while True:
             start_offset = handle.tell()
             line = handle.readline()
-            if not line or marker_re.match(line):
+            if marker_re.match(line) or not line:
                 break
         #Should now be at the start of a record, or end of the file
         while marker_re.match(line):
@@ -592,7 +592,7 @@ class SequentialSeqFileRandomAccess(SeqFileRandomAccess):
             while True:
                 end_offset = handle.tell()
                 line = handle.readline()
-                if not line or marker_re.match(line):
+                if marker_re.match(line) or not line:
                     yield id, start_offset, end_offset - start_offset
                     start_offset = end_offset
                     break
@@ -627,7 +627,7 @@ class GenBankRandomAccess(SequentialSeqFileRandomAccess):
         while True:
             start_offset = handle.tell()
             line = handle.readline()
-            if not line or marker_re.match(line):
+            if marker_re.match(line) or not line:
                 break
         #Should now be at the start of a record, or end of the file
         while marker_re.match(line):
@@ -637,7 +637,7 @@ class GenBankRandomAccess(SequentialSeqFileRandomAccess):
             while True:
                 end_offset = handle.tell()
                 line = handle.readline()
-                if not line or marker_re.match(line):
+                if marker_re.match(line) or not line:
                     if not key:
                         raise ValueError("Did not find ACCESSION/VERSION lines")
                     yield key, start_offset, end_offset - start_offset
