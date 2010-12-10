@@ -471,7 +471,8 @@ class SeqFileRandomAccess(object):
             mode = "rb"
         else:
             mode = "rU"
-        self._handle = open(filename, mode)
+        handle = open(filename, mode)
+        self._handle = handle
         self._alphabet = alphabet
         self._format = format
         #Load the parser class/function once an avoid the dict lookup in each
@@ -480,19 +481,21 @@ class SeqFileRandomAccess(object):
         #The following alphabet code is a bit nasty... duplicates logic in
         #Bio.SeqIO.parse()
         if alphabet is None:
-            def _parse():
+            def _parse(offset):
                 """Dynamically generated parser function (PRIVATE)."""
-                return i(self._handle).next()
+                handle.seek(offset)
+                return i(handle).next()
         else:
             #TODO - Detect alphabet support ONCE at __init__
-            def _parse():
+            def _parse(offset):
                 """Dynamically generated parser function (PRIVATE)."""
+                handle.seek(offset)
                 try:
-                    return i(self._handle, alphabet=alphabet).next()
+                    return i(handle, alphabet=alphabet).next()
                 except TypeError:
-                    return SeqIO._force_alphabet(i(self._handle),
+                    return SeqIO._force_alphabet(i(handle),
                                                  alphabet).next()
-        self._parse = _parse
+        self.get = _parse
 
     def __iter__(self):
         """Returns (id,offset) tuples."""
@@ -500,9 +503,7 @@ class SeqFileRandomAccess(object):
 
     def get(self, offset):
         """Returns SeqRecord."""
-        handle = self._handle
-        handle.seek(offset)
-        return self._parse()
+        raise NotImplementedError("Should be setup via __init__ method!")
 
     def get_raw(self, offset):
         """Returns string (if implemented for this file format)."""
