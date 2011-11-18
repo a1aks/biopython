@@ -425,6 +425,7 @@ class CircularDrawer(AbstractDrawer):
         # subtended at the diagram center, and the color as arguments
         draw_methods = {'BOX': self._draw_arc,
                         'ARROW': self._draw_arc_arrow,
+                        'JAGGY': self._draw_arc, #TODO
                         }
 
         # Get sigil for the feature, location dependent on the feature strand        

@@ -211,6 +211,7 @@ def draw_arrow(point1, point2, color=colors.lightgreen, border=None,
     elif orientation == 'left':
         x1, x2, y1, y2 = xmax, xmin, ymin, ymax
     else:
+        #TODO - Support 'both' for double headed arrows?
         raise ValueError("Invalid orientation %s, should be 'left' or 'right'" \
                          % repr(orientation))
 
@@ -236,6 +237,70 @@ def draw_arrow(point1, point2, color=colors.lightgreen, border=None,
                     x1+headbase, y1,
                     x1+headbase, y1+shaftbase,
                     x1, y1+shaftbase],
+                   strokeColor=strokecolor,
+                   #strokeWidth=max(1, int(boxheight/40.)),
+                   strokeWidth=1,
+                   #default is mitre/miter which can stick out too much:
+                   strokeLineJoin=1, #1=round
+                   fillColor=color,
+                   **kwargs)
+
+def draw_jaggy(point1, point2, color=colors.lightgreen, border=None,
+               head_length_ratio=0.5, teeth=3, **kwargs):
+    """Return closed path representing a jagged edged box.
+    
+    Some arguments are used as for draw_arrow (head_length_ratio), but rather
+    than a pointed arrow head, you get a jagged edge. Extra argument 'teeth'
+    is an integer.
+    
+    Returns a closed path object representing a jagged box enclosed by the
+    box with corners at {point1=(x1,y1), point2=(x2,y2)}, a jag length
+    given by head_length_ratio (also relative to box height).
+    """
+    x1, y1 = point1
+    x2, y2 = point2
+    
+    shaft_height_ratio=1.0
+    if head_length_ratio < 0:
+        raise ValueError("Jaggy head length ratio should be positive")
+    teeth = int(teeth)
+    if teeth < 1:
+        raise ValueError("Jaggy tooth count should be at least 1")
+    
+    if color == colors.white and border is None:   # Force black border on 
+        strokecolor = colors.black                 # white boxes with
+    elif border is None:                           # undefined border, else
+        strokecolor = color                        # use fill colour
+    elif border:
+        strokecolor = border
+    else:
+        #e.g. False
+        strokecolor = None
+
+    xmin, ymin = min(x1, x2), min(y1, y2)
+    xmax, ymax = max(x1, x2), max(y1, y2)
+
+    # We define boxheight and boxwidth accordingly, and calculate the shaft
+    # height from these.  We also ensure that the maximum head length is
+    # the width of the box enclosure
+    boxheight = ymax-ymin
+    boxwidth = xmax-xmin
+    shaftheight = boxheight*shaft_height_ratio
+    headlength = min(boxheight*head_length_ratio/teeth, boxwidth*0.5)
+
+    shafttop = 0.5*(boxheight+shaftheight)
+    shaftbase = boxheight-shafttop
+    headbase = boxwidth-headlength
+    midheight = 0.5*boxheight
+    points = []
+    for i in range(teeth):
+        points.extend((xmin, ymin+shaftbase+i*shaftheight/teeth,
+                       xmin+headlength, ymin+shaftbase+(i+1)*shaftheight/teeth))
+    for i in range(teeth):
+        points.extend((xmax, ymin+shaftbase+(teeth-i)*shaftheight/teeth,
+                       xmax-headlength, ymin+shaftbase+(teeth-i-1)*shaftheight/teeth))
+    #points.extend((xmax, ymin+shaftbase+shaftheight, xmax, ymin+shaftbase))
+    return Polygon(points,
                    strokeColor=strokecolor,
                    #strokeWidth=max(1, int(boxheight/40.)),
                    strokeWidth=1,

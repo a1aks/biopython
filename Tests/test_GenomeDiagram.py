@@ -274,7 +274,7 @@ class LabelTest(unittest.TestCase):
             orient = "portrait"
         self.gdd.draw(format='linear', orientation=orient,
                       tracklines=False,
-                      pagesize=(15*cm,5*cm*tracks),
+                      pagesize=(30*cm,3*cm*tracks),
                       fragments=1,
                       start=0, end=400)
         self.gdd.write(os.path.join('Graphics', name+".pdf"), "pdf")
@@ -285,12 +285,11 @@ class LabelTest(unittest.TestCase):
             for track_number in self.gdd.tracks:
                 self.gdd.move_track(track_number,track_number+1)
             self.gdd.draw(tracklines=False,
-                          pagesize=(15*cm,15*cm),
                           fragments=1,
                           start=0, end=400)
             self.gdd.write(os.path.join('Graphics', name+"_c.pdf"), "pdf")
     
-    def add_track_with_sigils(self, **kwargs):
+    def add_track_with_sigils(self, sigil, **kwargs):
         self.gdt_features = self.gdd.new_track(1, greytrack=False)
         self.gds_features = self.gdt_features.new_set()
         for i in range(18):
@@ -298,23 +297,26 @@ class LabelTest(unittest.TestCase):
             end = start + 17
             if i % 3 == 0:
                 strand=None
-                name = "Strandless"
+                name = "Strandless " + sigil
                 color=colors.orange
             elif i % 3 == 1:
                 strand=+1
-                name="Forward"
+                name="Forward " + sigil
                 color=colors.red
             else:
                 strand = -1
-                name="Reverse"
+                name="Reverse " + sigil
                 color=colors.blue
             feature = SeqFeature(FeatureLocation(start, end), strand=strand)
-            self.gds_features.add_feature(feature, name=name,
-                                          color=color, label=True, **kwargs)
+            self.gds_features.add_feature(feature, name=name, sigil=sigil,
+                                          color=color, border=False,
+                                          label=True, **kwargs)
 
     def test_label_default(self):
         """Feature labels - default."""
-        self.add_track_with_sigils()
+        self.add_track_with_sigils('BOX')
+        self.add_track_with_sigils('ARROW')
+        self.add_track_with_sigils('JAGGY')
         self.finish("labels_default")
 
 class SigilsTest(unittest.TestCase):

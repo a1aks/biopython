@@ -31,7 +31,7 @@ from reportlab.graphics.shapes import *
 from reportlab.lib import colors
 
 # GenomeDiagram imports
-from _AbstractDrawer import AbstractDrawer, draw_box, draw_arrow
+from _AbstractDrawer import AbstractDrawer, draw_box, draw_arrow, draw_jaggy
 from _AbstractDrawer import intermediate_points, angle2trig
 from _FeatureSet import FeatureSet
 from _GraphSet import GraphSet
@@ -1013,6 +1013,7 @@ class LinearDrawer(AbstractDrawer):
         # as argument
         draw_methods = {'BOX': draw_box,
                         'ARROW': draw_arrow,
+                        'JAGGY': draw_jaggy,
                         }
         method = draw_methods[feature.sigil]
         kwargs['head_length_ratio'] = feature.arrowhead_length
