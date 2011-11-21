@@ -583,6 +583,33 @@ class SigilsTest(unittest.TestCase):
                                       color="green", arrowhead_length=2.0)
         self.finish("GD_sigil_arrows_long")
 
+    def test_long_jaggy_heads(self):
+        """Feature jaggy sigil heads within bounding box."""
+        #Add a track of features, bigger height to emphasise any sigil errors
+        self.gdt_features = self.gdd.new_track(1, greytrack=True, height=3)
+        #We'll just use one feature set for these features,
+        self.gds_features = self.gdt_features.new_set()
+        feature = SeqFeature(FeatureLocation(25, 375), strand=+1)
+        self.gds_features.add_feature(feature, color="lightblue")
+        self.gds_features.add_feature(feature, name="Forward", sigil="JAGGY",
+                                      color="blue", arrowhead_length=75.0,
+                                      arrowtail_length=75.0)
+        feature = SeqFeature(FeatureLocation(25, 375), strand=-1)
+        self.gds_features.add_feature(feature, color="pink")
+        self.gds_features.add_feature(feature, name="Reverse", sigil="JAGGY",
+                                      color="red", arrowhead_length=75.0,
+                                      arrowtail_length=75.0)
+        #Add another track of features, bigger height to emphasise any sigil errors
+        self.gdt_features = self.gdd.new_track(1, greytrack=True, height=3)
+        #We'll just use one feature set for these features,
+        self.gds_features = self.gdt_features.new_set()
+        feature = SeqFeature(FeatureLocation(25, 375), strand=None)
+        self.gds_features.add_feature(feature, color="lightgreen")
+        self.gds_features.add_feature(feature, name="Standless", sigil="JAGGY",
+                                      color="green", arrowhead_length=50.0,
+                                      arrowtail_length=50.0)
+        self.finish("GD_sigil_jaggy_long")
+
 class DiagramTest(unittest.TestCase):
     """Creating feature sets, graph sets, tracks etc individually for the diagram."""
     def setUp(self):
