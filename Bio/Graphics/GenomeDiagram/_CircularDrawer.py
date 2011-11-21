@@ -425,11 +425,12 @@ class CircularDrawer(AbstractDrawer):
         # subtended at the diagram center, and the color as arguments
         draw_methods = {'BOX': self._draw_arc,
                         'ARROW': self._draw_arc_arrow,
-                        'JAGGY': self._draw_arc, #TODO
+                        'JAGGY': self._draw_arc_jaggy,
                         }
 
         # Get sigil for the feature, location dependent on the feature strand        
         method = draw_methods[feature.sigil]
+        kwargs['tail_length_ratio'] = feature.arrowtail_length
         kwargs['head_length_ratio'] = feature.arrowhead_length
         kwargs['shaft_height_ratio'] = feature.arrowshaft_height
         
@@ -1361,3 +1362,94 @@ class CircularDrawer(AbstractDrawer):
             p.closePath()
             return p
 
+    def _draw_arc_jaggy(self, inner_radius, outer_radius, startangle, endangle,
+                  color, border=None,
+                  head_length_ratio=0.5, tail_length_ratio=None,
+                  orientation='right', teeth=4, **kwargs):
+        """Draw an jagged edged box along an arc."""
+
+        if tail_length_ratio is None:
+            tail_length_ratio = head_length_ratio
+        if orientation == 'right':
+            pass
+        elif orientation == 'left':
+            head_length_ratio, tail_length_ratio = tail_length_ratio, head_length_ratio
+        else:
+            raise ValueError("Invalid orientation %s, should be 'left' or 'right'" \
+                             % repr(orientation))
+
+        shaft_height_ratio=1.0
+        if head_length_ratio < 0:
+            raise ValueError("Jaggy head length ratio should be positive")
+        teeth = int(teeth)
+        if teeth < 1:
+            raise ValueError("Jaggy tooth count should be at least 1")
+
+        if color == colors.white and border is None:   # Force black border on 
+            strokecolor = colors.black                 # white boxes with
+        elif border is None:                           # undefined border, else
+            strokecolor = color                        # use fill color
+        elif border:
+            if not isinstance(border, colors.Color):
+                raise ValueError("Invalid border color %s" % repr(border))
+            strokecolor = border
+        else:
+            #e.g. False
+            strokecolor = None
+
+        startangle, endangle = min(startangle, endangle), max(startangle, endangle)
+        angle = float(endangle - startangle)    # angle subtended by arc
+        middle_radius = 0.5*(inner_radius+outer_radius)
+        boxheight = outer_radius - inner_radius
+        shaft_height = boxheight*shaft_height_ratio
+        shaft_inner_radius = middle_radius - 0.5*shaft_height
+        shaft_outer_radius = middle_radius + 0.5*shaft_height
+        
+        assert startangle <= endangle and angle >= 0
+        if head_length_ratio and tail_length_ratio:
+            headangle = max(endangle - min(boxheight*head_length_ratio/(middle_radius*teeth), angle*0.5), startangle)
+            tailangle = min(startangle + min(boxheight*tail_length_ratio/(middle_radius*teeth), angle*0.5), endangle)
+        elif head_length_ratio:
+            headangle = max(endangle - min(boxheight*head_length_ratio/(middle_radius*teeth), angle), startangle)
+            tailangle = startangle
+        else:
+            headangle = endangle
+            tailangle = min(startangle + min(boxheight*tail_length_ratio/(middle_radius*teeth), angle), endangle)
+
+        assert startangle <= tailangle <= headangle <= endangle, \
+            (startangle, tailangle, headangle, endangle, angle)
+        print (startangle, tailangle, headangle, endangle, angle, head_length_ratio, tail_length_ratio)
+
+        # Calculate trig values for angle and coordinates
+        startcos, startsin = cos(startangle), sin(startangle)
+        headcos, headsin = cos(headangle), sin(headangle)
+        endcos, endsin = cos(endangle), sin(endangle)
+        x0,y0 = self.xcenter, self.ycenter      # origin of the circle
+
+        p = ArcPath(strokeColor=strokecolor,
+                    fillColor=color,
+                    #default is mitre/miter which can stick out too much:
+                    strokeLineJoin=1, #1=round
+                    strokewidth=0,
+                    **kwargs)
+        #Note reportlab counts angles anti-clockwise from the horizontal
+        #(as in mathematics, e.g. complex numbers and polar coordinates)
+        #but we use clockwise from the vertical.  Also reportlab uses
+        #degrees, but we use radians.
+        p.addArc(self.xcenter, self.ycenter, shaft_inner_radius,
+                 90 - (headangle * 180 / pi), 90 - (startangle * 180 / pi),
+                 moveTo=True)
+        for i in range(1,teeth):
+            #TODO - Explicit curved line when drawing long jaggies
+            p.addArc(self.xcenter, self.ycenter, shaft_inner_radius+i*shaft_height/teeth,
+                     90 - (tailangle * 180 / pi), 90 - (startangle * 180 / pi))
+        p.addArc(self.xcenter, self.ycenter, shaft_outer_radius,
+                 90 - (endangle * 180 / pi), 90 - (tailangle * 180 / pi),
+                 reverse=True)
+        for i in range(1,teeth):
+            #TODO - Explicit curved line when drawing long jaggies
+            p.addArc(self.xcenter, self.ycenter, shaft_outer_radius-i*shaft_height/teeth,
+                     90 - (endangle * 180 / pi), 90 - (headangle * 180 / pi),
+                     reverse=True)
+        p.closePath()
+        return p

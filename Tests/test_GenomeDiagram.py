@@ -289,7 +289,7 @@ class LabelTest(unittest.TestCase):
                           start=0, end=400)
             self.gdd.write(os.path.join('Graphics', name+"_c.pdf"), "pdf")
     
-    def add_track_with_sigils(self, sigil, **kwargs):
+    def add_track_with_sigils(self, sigil, label=False, **kwargs):
         self.gdt_features = self.gdd.new_track(1, greytrack=False)
         self.gds_features = self.gdt_features.new_set()
         for i in range(18):
@@ -310,15 +310,15 @@ class LabelTest(unittest.TestCase):
             feature = SeqFeature(FeatureLocation(start, end), strand=strand)
             self.gds_features.add_feature(feature, name=name, sigil=sigil,
                                           color=color, border=False,
-                                          label=True, **kwargs)
+                                          label=label, **kwargs)
 
     def test_label_default(self):
         """Feature labels - default."""
-        self.add_track_with_sigils('BOX')
+        self.add_track_with_sigils('BOX', label=True)
         self.add_track_with_sigils('ARROW')
-        self.add_track_with_sigils('JAGGY', arrowhead_length=0.25, arrowtail_length=0.25)
-        self.add_track_with_sigils('JAGGY', arrowhead_length=0, arrowtail_length=0.25)
-        self.add_track_with_sigils('JAGGY', arrowhead_length=0.25, arrowtail_length=0)
+        self.add_track_with_sigils('JAGGY', arrowhead_length=1, arrowtail_length=1)
+        self.add_track_with_sigils('JAGGY', arrowhead_length=0, arrowtail_length=1)
+        self.add_track_with_sigils('JAGGY', arrowhead_length=1, arrowtail_length=0)
         self.finish("labels_default")
 
 class SigilsTest(unittest.TestCase):
