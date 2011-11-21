@@ -423,7 +423,7 @@ class CircularDrawer(AbstractDrawer):
         # Distribution dictionary for various ways of drawing the feature
         # Each method takes the inner and outer radii, the start and end angle
         # subtended at the diagram center, and the color as arguments
-        draw_methods = {'BOX': self._draw_arc,
+        draw_methods = {'BOX': self._draw_arc_box,
                         'ARROW': self._draw_arc_arrow,
                         'JAGGY': self._draw_arc_jaggy,
                         }
@@ -697,8 +697,8 @@ class CircularDrawer(AbstractDrawer):
                 barcolor = graph.negcolor
 
             # Draw bar
-            bar_elements.append(self._draw_arc(ctr, ctr+barval, pos0angle,
-                                              pos1angle, barcolor))
+            bar_elements.append(self._draw_arc_box(ctr, ctr+barval, pos0angle,
+                                                   pos1angle, barcolor))
         return bar_elements
 
     
@@ -742,8 +742,9 @@ class CircularDrawer(AbstractDrawer):
                                                     maxval, minval, val)
             
             # Draw heat box
-            heat_elements.append(self._draw_arc(btm, top, pos0angle, pos1angle,
-                                                heat, border=heat))
+            heat_elements.append(self._draw_arc_box(btm, top,
+                                                    pos0angle, pos1angle,
+                                                    heat, border=heat))
         return heat_elements
 
 
@@ -1003,13 +1004,15 @@ class CircularDrawer(AbstractDrawer):
         if track.start is not None or track.end is not None:
             #Draw an arc, leaving out the wedge
             p = ArcPath(strokeColor=track.scale_color, fillColor=None)
-            greytrack_bgs.append(self._draw_arc(btm, top, startangle, endangle,
-                                 colors.Color(0.96, 0.96, 0.96)))
+            greytrack_bgs.append(self._draw_arc_box(btm, top,
+                                                    startangle, endangle,
+                                                    colors.Color(0.96, 0.96, 0.96)))
         elif self.sweep < 1:
             #Make a partial circle, a large arc box
             #This method assumes the correct center for us.
-            greytrack_bgs.append(self._draw_arc(btm, top, 0, 2*pi*self.sweep,
-                                 colors.Color(0.96, 0.96, 0.96)))
+            greytrack_bgs.append(self._draw_arc_box(btm, top,
+                                                    0, 2*pi*self.sweep,
+                                                    colors.Color(0.96, 0.96, 0.96)))
         else:
             #Make a full circle (using a VERY thick linewidth)
             greytrack_bgs.append(Circle(self.xcenter, self.ycenter, ctr, 
@@ -1047,9 +1050,8 @@ class CircularDrawer(AbstractDrawer):
         angle = self.sweep*2*pi*(base-self.start)/self.length
         return (angle, cos(angle), sin(angle))
 
-
-    def _draw_arc(self, inner_radius, outer_radius, startangle, endangle,
-                 color, border=None, colour=None, **kwargs):
+    def _draw_arc_box(self, inner_radius, outer_radius, startangle, endangle,
+                      color, border=None, colour=None, **kwargs):
         """ draw_arc(self, inner_radius, outer_radius, startangle, endangle, color)
                 -> Group
 
