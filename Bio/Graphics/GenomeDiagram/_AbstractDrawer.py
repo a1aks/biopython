@@ -246,12 +246,16 @@ def draw_arrow(point1, point2, color=colors.lightgreen, border=None,
                    **kwargs)
 
 def draw_jaggy(point1, point2, color=colors.lightgreen, border=None,
-               head_length_ratio=0.5, teeth=3, **kwargs):
+               head_length_ratio=0.5, tail_length_ratio=None,
+               orientation='right', teeth=4, **kwargs):
     """Return closed path representing a jagged edged box.
     
     Some arguments are used as for draw_arrow (head_length_ratio), but rather
     than a pointed arrow head, you get a jagged edge. Extra argument 'teeth'
-    is an integer.
+    is an integer. Additional argument tail_length_ratio controls the jagged
+    edged of the back of the feature. Either head_length_ratio or
+    tail_length_ratio may be zero for a smooth edge, but they default to
+    jagged at both ends.
     
     Returns a closed path object representing a jagged box enclosed by the
     box with corners at {point1=(x1,y1), point2=(x2,y2)}, a jag length
@@ -259,6 +263,13 @@ def draw_jaggy(point1, point2, color=colors.lightgreen, border=None,
     """
     x1, y1 = point1
     x2, y2 = point2
+    
+    if tail_length_ratio is None:
+        tail_length_ratio = head_length_ratio
+    if orientation == 'right':
+        pass
+    elif orientation == 'left':
+        head_length_ratio, tail_length_ratio = tail_length_ratio, head_length_ratio
     
     shaft_height_ratio=1.0
     if head_length_ratio < 0:
@@ -287,6 +298,7 @@ def draw_jaggy(point1, point2, color=colors.lightgreen, border=None,
     boxwidth = xmax-xmin
     shaftheight = boxheight*shaft_height_ratio
     headlength = min(boxheight*head_length_ratio/teeth, boxwidth*0.5)
+    taillength = min(boxheight*tail_length_ratio/teeth, boxwidth*0.5)
 
     shafttop = 0.5*(boxheight+shaftheight)
     shaftbase = boxheight-shafttop
@@ -295,7 +307,7 @@ def draw_jaggy(point1, point2, color=colors.lightgreen, border=None,
     points = []
     for i in range(teeth):
         points.extend((xmin, ymin+shaftbase+i*shaftheight/teeth,
-                       xmin+headlength, ymin+shaftbase+(i+1)*shaftheight/teeth))
+                       xmin+taillength, ymin+shaftbase+(i+1)*shaftheight/teeth))
     for i in range(teeth):
         points.extend((xmax, ymin+shaftbase+(teeth-i)*shaftheight/teeth,
                        xmax-headlength, ymin+shaftbase+(teeth-i-1)*shaftheight/teeth))

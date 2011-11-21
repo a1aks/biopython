@@ -71,6 +71,9 @@ class Feature(object):
         o arrowhead_length  Float denoting length of the arrow head to be drawn,
                             relative to the bounding box height.  The arrow shaft
                             takes up the remainder of the bounding box's length.
+        
+        o arrowtail_length Float denoting length of the tail end detail of any
+                           sigil, equilvalent to arrowhead_length.
 
         o arrowshaft_height  Float denoting length of the representative arrow
                              shaft to be drawn, relative to the bounding box height.
@@ -138,6 +141,7 @@ class Feature(object):
         self._feature = None            # Bio.SeqFeature object to wrap
         self.hide = 0                   # show by default
         self.sigil = 'BOX'
+        self.arrowtail_length = 0.0
         self.arrowhead_length = 0.5 # 50% of the box height
         self.arrowshaft_height = 0.4 # 40% of the box height
         self.name_qualifiers = ['gene', 'label', 'name', 'locus_tag', 'product']

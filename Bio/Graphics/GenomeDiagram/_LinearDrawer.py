@@ -1016,6 +1016,7 @@ class LinearDrawer(AbstractDrawer):
                         'JAGGY': draw_jaggy,
                         }
         method = draw_methods[feature.sigil]
+        kwargs['tail_length_ratio'] = feature.arrowtail_length
         kwargs['head_length_ratio'] = feature.arrowhead_length
         kwargs['shaft_height_ratio'] = feature.arrowshaft_height
 

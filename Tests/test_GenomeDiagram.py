@@ -316,7 +316,9 @@ class LabelTest(unittest.TestCase):
         """Feature labels - default."""
         self.add_track_with_sigils('BOX')
         self.add_track_with_sigils('ARROW')
-        self.add_track_with_sigils('JAGGY')
+        self.add_track_with_sigils('JAGGY', arrowhead_length=0.25, arrowtail_length=0.25)
+        self.add_track_with_sigils('JAGGY', arrowhead_length=0, arrowtail_length=0.25)
+        self.add_track_with_sigils('JAGGY', arrowhead_length=0.25, arrowtail_length=0)
         self.finish("labels_default")
 
 class SigilsTest(unittest.TestCase):
