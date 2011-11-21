@@ -297,8 +297,15 @@ def draw_jaggy(point1, point2, color=colors.lightgreen, border=None,
     boxheight = ymax-ymin
     boxwidth = xmax-xmin
     shaftheight = boxheight*shaft_height_ratio
-    headlength = min(boxheight*head_length_ratio/teeth, boxwidth*0.5)
-    taillength = min(boxheight*tail_length_ratio/teeth, boxwidth*0.5)
+    if head_length_ratio and tail_length_ratio:
+        headlength = min(boxheight*head_length_ratio/teeth, boxwidth*0.5)
+        taillength = min(boxheight*tail_length_ratio/teeth, boxwidth*0.5)
+    elif head_length_ratio:
+        headlength = min(boxheight*head_length_ratio/teeth, boxwidth)
+        taillength = 0
+    else:
+        headlength = 0
+        taillength = min(boxheight*tail_length_ratio/teeth, boxwidth)
 
     shafttop = 0.5*(boxheight+shaftheight)
     shaftbase = boxheight-shafttop
