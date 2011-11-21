@@ -416,6 +416,7 @@ class SigilsTest(unittest.TestCase):
         self.gds_features = self.gdt_features.new_set()
         #Green arrows just have small heads (meaning if there is a mitre
         #it will escape the bounding box).  Red arrows are small triangles.
+        #The grey features are to show the bounding boxes.
         feature = SeqFeature(FeatureLocation(15, 30), strand=+1)
         self.gds_features.add_feature(feature, color="grey")
         self.gds_features.add_feature(feature, name="Forward", sigil="ARROW",
@@ -441,6 +442,7 @@ class SigilsTest(unittest.TestCase):
         self.gds_features.add_feature(feature, name="Strandless", sigil="ARROW",
                                       arrowhead_length=0.05)
         feature = SeqFeature(FeatureLocation(265, 280), strand=-1)
+        self.gds_features.add_feature(feature, color="grey")
         self.gds_features.add_feature(feature, name="Reverse", sigil="ARROW",
                                       arrowhead_length=0.05)
         feature = SeqFeature(FeatureLocation(305, 310), strand=-1)
@@ -452,6 +454,110 @@ class SigilsTest(unittest.TestCase):
         self.gds_features.add_feature(feature, name="Reverse", sigil="ARROW",
                                       arrowhead_length=0.05)
         self.finish("GD_sigil_arrows_small")
+
+    def test_small_jaggy_heads(self):
+        """Feature jaggy sigil heads within bounding box."""
+        #Add a track of features, bigger height to emphasise any sigil errors
+        self.gdt_features = self.gdd.new_track(1, greytrack=True, height=3)
+        #We'll just use one feature set for these features,
+        self.gds_features = self.gdt_features.new_set()
+        #Green jaggies just have small heads (meaning if there is a mitre
+        #it will escape the bounding box).  Red jaggies are small triangles
+        #or maximal jagged edges. Blue and yellow have just left and right
+        #jagged edges only. The grey features are to show the bounding boxes.
+        feature = SeqFeature(FeatureLocation(15, 20), strand=+1)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Forward", sigil="JAGGY",
+                                      arrowtail_length=1000,
+                                      arrowhead_length=0, color="red")
+        feature = SeqFeature(FeatureLocation(25, 35), strand=+1)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Forward", sigil="JAGGY",
+                                      arrowtail_length=1000,
+                                      arrowhead_length=1000, color="red")
+        feature = SeqFeature(FeatureLocation(40, 45), strand=+1)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Forward", sigil="JAGGY",
+                                      arrowtail_length=0,
+                                      arrowhead_length=1000, color="red")
+        feature = SeqFeature(FeatureLocation(60, 75), strand=+1)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Forward", sigil="JAGGY",
+                                      arrowtail_length=0.25,
+                                      arrowhead_length=0.25)
+        feature = SeqFeature(FeatureLocation(80, 100), strand=+1)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Forward", sigil="JAGGY",
+                                      arrowtail_length=0.25,
+                                      arrowhead_length=0, color="blue")
+        feature = SeqFeature(FeatureLocation(105, 125), strand=+1)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Forward", sigil="JAGGY",
+                                      arrowtail_length=0,
+                                      arrowhead_length=0.25, color="yellow")
+        #Now strandless,
+        feature = SeqFeature(FeatureLocation(140, 145), strand=None)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Strandless", sigil="JAGGY",
+                                      arrowtail_length=1000,
+                                      arrowhead_length=0, color="red")
+        feature = SeqFeature(FeatureLocation(150, 160), strand=None)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Strandless", sigil="JAGGY",
+                                      arrowtail_length=1000,
+                                      arrowhead_length=1000, color="red")
+        feature = SeqFeature(FeatureLocation(165, 170), strand=None)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Strandless", sigil="JAGGY",
+                                      arrowtail_length=0,
+                                      arrowhead_length=1000, color="red")
+        feature = SeqFeature(FeatureLocation(185, 200), strand=None)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Strandless", sigil="JAGGY",
+                                      arrowtail_length=0.25,
+                                      arrowhead_length=0.25)
+        feature = SeqFeature(FeatureLocation(205, 225), strand=None)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Forward", sigil="JAGGY",
+                                      arrowtail_length=0.25,
+                                      arrowhead_length=0, color="blue")
+        feature = SeqFeature(FeatureLocation(230, 250), strand=None)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Forward", sigil="JAGGY",
+                                      arrowtail_length=0,
+                                      arrowhead_length=0.25, color="yellow")
+        #Now reverse strand
+        feature = SeqFeature(FeatureLocation(265, 270), strand=-1)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Reverse", sigil="JAGGY",
+                                      arrowtail_length=0,
+                                      arrowhead_length=1000, color="red")
+        feature = SeqFeature(FeatureLocation(275, 285), strand=-1)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Reverse", sigil="JAGGY",
+                                      arrowtail_length=1000,
+                                      arrowhead_length=1000, color="red")
+        feature = SeqFeature(FeatureLocation(290, 295), strand=-1)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Reverse", sigil="JAGGY",
+                                      arrowtail_length=1000,
+                                      arrowhead_length=0, color="red")
+        feature = SeqFeature(FeatureLocation(310, 325), strand=-1)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Reverse", sigil="JAGGY",
+                                      arrowtail_length=0,
+                                      arrowhead_length=0.25, color="yellow")
+        feature = SeqFeature(FeatureLocation(330, 350), strand=-1)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Forward", sigil="JAGGY",
+                                      arrowtail_length=0.25,
+                                      arrowhead_length=0, color="blue")
+        feature = SeqFeature(FeatureLocation(355, 375), strand=-1)
+        self.gds_features.add_feature(feature, color="grey")
+        self.gds_features.add_feature(feature, name="Forward", sigil="JAGGY",
+                                      arrowtail_length=0.25,
+                                      arrowhead_length=0.25)
+        self.finish("GD_sigil_jaggy_small")
 
     def test_long_arrow_heads(self):
         """Feature arrow sigil heads within bounding box."""
