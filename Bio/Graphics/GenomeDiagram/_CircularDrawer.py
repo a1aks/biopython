@@ -1,5 +1,5 @@
 # Copyright 2003-2008 by Leighton Pritchard.  All rights reserved.
-# Revisions copyright 2008-2009 by Peter Cock.
+# Revisions copyright 2008-2011 by Peter Cock.
 # This code is part of the Biopython distribution and governed by its
 # license.  Please see the LICENSE file that should have been included
 # as part of this package.
@@ -1050,6 +1050,34 @@ class CircularDrawer(AbstractDrawer):
         angle = self.sweep*2*pi*(base-self.start)/self.length
         return (angle, cos(angle), sin(angle))
 
+    def _draw_arc_line(self, path, start_radius, end_radius, start_angle, end_angle, move=False):
+        """Adds a list of points to a path object.
+        
+        Assumes angles given are in degrees!
+        
+        Represents what would be a straight line on a linear diagram.
+        """
+        x0, y0 = self.xcenter, self.ycenter      # origin of the circle
+        radius_diff = end_radius - start_radius
+        angle_diff = end_angle - start_angle
+        dx = 0.01 #heuristic
+        a = start_angle*pi/180
+        if move:
+            path.moveTo(x0+start_radius*cos(a), y0+start_radius*sin(a))
+        else:
+            path.lineTo(x0+start_radius*cos(a), y0+start_radius*sin(a))
+        x = dx
+        if 0.01 <= abs(dx):
+            while x < 1:
+                r = start_radius + x*radius_diff
+                a = (start_angle + x*(angle_diff))*pi/180 #to radians for sin/cos
+                #print x0+r*cos(a), y0+r*sin(a)
+                path.lineTo(x0+r*cos(a), y0+r*sin(a))
+                x += dx
+        a = end_angle*pi/180
+        path.lineTo(x0+end_radius*cos(a), y0+end_radius*sin(a))
+        
+        
     def _draw_arc_box(self, inner_radius, outer_radius, startangle, endangle,
                       color, border=None, colour=None, **kwargs):
         """ draw_arc(self, inner_radius, outer_radius, startangle, endangle, color)
@@ -1158,37 +1186,15 @@ class CircularDrawer(AbstractDrawer):
                      moveTo=True, reverse=True)
             if flip:
                 #Flipped, join end to start,
-                dx = 0.1
-                x = dx
-                while x < 1:
-                    r = inner_radius + x*(outer_radius-inner_radius)
-                    a = (i_end + x*(o_start-i_end))*pi/180 #to radians for sin/cos
-                    p.lineTo(x0+r*cos(a), y0+r*sin(a))
-                    x += dx
+                self._draw_arc_line(p, inner_radius, outer_radius, i_end, o_start)
                 p.addArc(x0, y0, outer_radius, o_end, o_start, reverse=True)
-                x = dx
-                while x < 1:
-                    r = outer_radius - x*(outer_radius-inner_radius)
-                    a = (o_end + x*(i_start-o_end))*pi/180 #to radians for sin/cos
-                    p.lineTo(x0+r*cos(a), y0+r*sin(a))
-                    x += dx
+                self._draw_arc_line(p, outer_radius, inner_radius, o_end, i_start)
             else:
                 #Not flipped, join start to start, end to end
-                dx = 0.1
-                x = dx
-                while x < 1:
-                    r = inner_radius + x*(outer_radius-inner_radius)
-                    a = (i_end + x*(o_end-i_end))*pi/180 #to radians for sin/cos
-                    p.lineTo(x0+r*cos(a), y0+r*sin(a))
-                    x += dx
+                self._draw_arc_line(p, inner_radius, outer_radius, i_end, o_end)
                 p.addArc(x0, y0, outer_radius, o_end, o_start,
                          reverse=False)
-                x = dx
-                while x < 1:
-                    r = outer_radius - x*(outer_radius-inner_radius)
-                    a = (o_start + x*(i_start-o_start))*pi/180 #to radians for sin/cos
-                    p.lineTo(x0+r*cos(a), y0+r*sin(a))
-                    x += dx
+                self._draw_arc_line(p, outer_radius, inner_radius, o_start, i_start)
             p.closePath()
             return p
         else:
@@ -1300,26 +1306,17 @@ class CircularDrawer(AbstractDrawer):
             p.addArc(self.xcenter, self.ycenter, shaft_outer_radius,
                      90 - (headangle * 180 / pi), 90 - (startangle * 180 / pi),
                      reverse=True)
-            p.lineTo(x0+outer_radius*headsin, y0+outer_radius*headcos)
             if abs(angle) < 0.5:
+                p.lineTo(x0+outer_radius*headsin, y0+outer_radius*headcos)
                 p.lineTo(x0+middle_radius*endsin, y0+middle_radius*endcos)
                 p.lineTo(x0+inner_radius*headsin, y0+inner_radius*headcos)
             else:
-                dx = min(0.1, abs(angle)/50.0) #auto-scale number of steps
-                x = dx
-                while x < 1:
-                    r = outer_radius - x*(outer_radius-middle_radius)
-                    a = headangle + x*(endangle-headangle)
-                    p.lineTo(x0+r*sin(a), y0+r*cos(a))
-                    x += dx
-                p.lineTo(x0+middle_radius*endsin, y0+middle_radius*endcos)
-                x = dx
-                while x < 1:
-                    r = middle_radius - x*(middle_radius-inner_radius)
-                    a = headangle + (1-x)*(endangle-headangle)
-                    p.lineTo(x0+r*sin(a), y0+r*cos(a))
-                    x += dx
-                p.lineTo(x0+inner_radius*headsin, y0+inner_radius*headcos)
+                self._draw_arc_line(p, outer_radius, middle_radius,
+                                    90 - (headangle * 180 / pi),
+                                    90 - (endangle * 180 / pi))
+                self._draw_arc_line(p, middle_radius, inner_radius,
+                                    90 - (endangle * 180 / pi),
+                                    90 - (headangle * 180 / pi))
             p.closePath()
             return p
         else:
@@ -1339,28 +1336,19 @@ class CircularDrawer(AbstractDrawer):
             p.addArc(self.xcenter, self.ycenter, shaft_outer_radius,
                      90 - (endangle * 180 / pi), 90 - (headangle * 180 / pi),
                      reverse=False)
-            p.lineTo(x0+outer_radius*headsin, y0+outer_radius*headcos)
             #Note - two staight lines is only a good approximation for small
             #head angle, in general will need to curved lines here:
             if abs(angle) < 0.5:
+                p.lineTo(x0+outer_radius*headsin, y0+outer_radius*headcos)
                 p.lineTo(x0+middle_radius*startsin, y0+middle_radius*startcos)
                 p.lineTo(x0+inner_radius*headsin, y0+inner_radius*headcos)
             else:
-                dx = min(0.1, abs(angle)/50.0) #auto-scale number of steps
-                x = dx
-                while x < 1:
-                    r = outer_radius - x*(outer_radius-middle_radius)
-                    a = headangle + x*(startangle-headangle)
-                    p.lineTo(x0+r*sin(a), y0+r*cos(a))
-                    x += dx
-                p.lineTo(x0+middle_radius*startsin, y0+middle_radius*startcos)
-                x = dx
-                while x < 1:
-                    r = middle_radius - x*(middle_radius-inner_radius)
-                    a = headangle + (1-x)*(startangle-headangle)
-                    p.lineTo(x0+r*sin(a), y0+r*cos(a))
-                    x += dx
-                p.lineTo(x0+inner_radius*headsin, y0+inner_radius*headcos)
+                self._draw_arc_line(p, outer_radius, middle_radius,
+                                    90 - (headangle * 180 / pi),
+                                    90 - (startangle * 180 / pi))
+                self._draw_arc_line(p, middle_radius, inner_radius,
+                                    90 - (startangle * 180 / pi),
+                                    90 - (headangle * 180 / pi))
             p.closePath()
             return p
 
@@ -1438,19 +1426,29 @@ class CircularDrawer(AbstractDrawer):
         #but we use clockwise from the vertical.  Also reportlab uses
         #degrees, but we use radians.
         p.addArc(self.xcenter, self.ycenter, shaft_inner_radius,
-                 90 - (headangle * 180 / pi), 90 - (startangle * 180 / pi),
+                 90 - (headangle * 180 / pi), 90 - (tailangle * 180 / pi),
                  moveTo=True)
-        for i in range(1,teeth):
-            #TODO - Explicit curved line when drawing long jaggies
+        for i in range(0, teeth):
             p.addArc(self.xcenter, self.ycenter, shaft_inner_radius+i*shaft_height/teeth,
                      90 - (tailangle * 180 / pi), 90 - (startangle * 180 / pi))
+            #Curved line needed when drawing long jaggies
+            self._draw_arc_line(p,
+                                shaft_inner_radius+i*shaft_height/teeth,
+                                shaft_inner_radius+(i+1)*shaft_height/teeth,
+                                90 - (startangle * 180 / pi),
+                                90 - (tailangle * 180 / pi))
         p.addArc(self.xcenter, self.ycenter, shaft_outer_radius,
-                 90 - (endangle * 180 / pi), 90 - (tailangle * 180 / pi),
+                 90 - (headangle * 180 / pi), 90 - (tailangle * 180 / pi),
                  reverse=True)
-        for i in range(1,teeth):
-            #TODO - Explicit curved line when drawing long jaggies
+        for i in range(0, teeth):
             p.addArc(self.xcenter, self.ycenter, shaft_outer_radius-i*shaft_height/teeth,
                      90 - (endangle * 180 / pi), 90 - (headangle * 180 / pi),
                      reverse=True)
+            #Curved line needed when drawing long jaggies
+            self._draw_arc_line(p,
+                                shaft_outer_radius-i*shaft_height/teeth,
+                                shaft_outer_radius-(i+1)*shaft_height/teeth,
+                                90 - (endangle * 180 / pi),
+                                90 - (headangle * 180 / pi))
         p.closePath()
         return p
