@@ -297,15 +297,15 @@ class LabelTest(unittest.TestCase):
             end = start + 17
             if i % 3 == 0:
                 strand=None
-                name = "Strandless " + sigil
+                name = "Strandless"
                 color=colors.orange
             elif i % 3 == 1:
                 strand=+1
-                name="Forward " + sigil
+                name="Forward"
                 color=colors.red
             else:
                 strand = -1
-                name="Reverse " + sigil
+                name="Reverse"
                 color=colors.blue
             feature = SeqFeature(FeatureLocation(start, end), strand=strand)
             self.gds_features.add_feature(feature, name=name, sigil=sigil,
