@@ -1418,7 +1418,6 @@ class CircularDrawer(AbstractDrawer):
 
         assert startangle <= tailangle <= headangle <= endangle, \
             (startangle, tailangle, headangle, endangle, angle)
-        print (startangle, tailangle, headangle, endangle, angle, head_length_ratio, tail_length_ratio)
 
         # Calculate trig values for angle and coordinates
         startcos, startsin = cos(startangle), sin(startangle)
