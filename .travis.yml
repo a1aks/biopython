@@ -1,0 +1,20 @@
+#Special configuration file to run tests on Travis-CI via GitHub notifications
+#See http://travis-ci.org/ for details
+
+language: python
+python:
+  - "2.5"
+  - "2.6"
+  - "2.7"
+
+script: cd Tests && python run_tests.py --offline
+
+#TODO?
+#branches:
+#  only:
+#    - master
+
+#TODO?
+#notifications:
+#  email:
+#    - biopython-dev@lists.open-bio.org
