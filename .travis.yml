@@ -7,8 +7,12 @@ python:
   - "2.6"
   - "2.7"
 
-install: python setup.py install
-script: cd Tests && python run_tests.py --offline
+install:
+  - pip install numpy --use-mirrors
+  - python setup.py install
+
+before_script: cd Tests
+script: python run_tests.py --offline
 
 #TODO?
 #branches:
