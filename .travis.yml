@@ -12,8 +12,11 @@ install:
   - sudo apt-get install t-coffee muscle mafft probcons wise emboss
   - /usr/bin/yes | python setup.py install | tail
 
-before_script: cd Tests
-script: python run_tests.py --offline
+before_script:
+  - cd Tests
+script:
+  - "if [[ $TRAVIS_PYTHON_VERSION == '3.2' ]]; then python3 run_tests.py --offline; fi"
+  - "if [[ $TRAVIS_PYTHON_VERSION != '3.2' ]]; then python  run_tests.py --offline; fi"
 
 branches:
   only:
