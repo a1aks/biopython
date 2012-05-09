@@ -14,10 +14,9 @@ install:
 before_script: cd Tests
 script: python run_tests.py --offline
 
-#TODO?
-#branches:
-#  only:
-#    - master
+branches:
+  only:
+    - travis
 
 #TODO?
 #notifications:
